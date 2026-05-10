@@ -18,6 +18,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
   const tonnages = [...new Set(db.press.filter((p) => p.kind === value.kind).map((p) => p.tonnage))]
     .sort((a, b) => a - b);
   const roles = db.worker.map((w) => w.role);
+  const uphInvalid = value.uph != null && value.uph <= 0;
 
   return (
     <tr>
@@ -25,6 +26,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
       <td data-label="구분">
         <select
           value={value.kind}
+          aria-label={`공정 ${index + 1} 구분`}
           onChange={(e) => {
             const kind = e.target.value as PressKind;
             const firstTonnage = db.press.find((p) => p.kind === kind)?.tonnage;
@@ -38,6 +40,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
       <td data-label="톤수">
         <select
           value={value.tonnage}
+          aria-label={`공정 ${index + 1} 톤수`}
           onChange={(e) => {
             const tonnage = parseFiniteNumber(e.target.value);
             if (tonnage != null) onChange({ tonnage });
@@ -56,11 +59,17 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
           min={1}
           value={value.uph ?? ''}
           onChange={(e) => onChange({ uph: parseFiniteNumber(e.target.value) })}
+          placeholder="예: 720"
+          inputMode="decimal"
+          aria-label={`공정 ${index + 1} UPH`}
+          aria-invalid={uphInvalid}
+          className={uphInvalid ? 'input-invalid' : undefined}
         />
       </td>
       <td data-label="직종">
         <select
           value={value.workerRole}
+          aria-label={`공정 ${index + 1} 직종`}
           onChange={(e) => onChange({ workerRole: e.target.value })}
         >
           {roles.map((r) => (

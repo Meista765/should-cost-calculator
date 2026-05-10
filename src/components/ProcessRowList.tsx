@@ -13,14 +13,22 @@ export function ProcessRowList({ count, rows, onSetCount, onPatchRow, db }: Prop
   return (
     <div className="processes">
       <div className="row-inline">
-        <label>총 공정 수</label>
-        <select value={count} onChange={(e) => onSetCount(Number(e.target.value))}>
+        <label htmlFor="process-count">총 공정 수</label>
+        <select
+          id="process-count"
+          value={count}
+          onChange={(e) => onSetCount(Number(e.target.value))}
+          aria-describedby="process-count-help"
+        >
           {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
           ))}
         </select>
+        <span id="process-count-help" className="field-hint">
+          공정별 UPH와 직종을 입력하면 가공비가 계산됩니다.
+        </span>
       </div>
       <div className="table-scroll">
         <table className="process-table">

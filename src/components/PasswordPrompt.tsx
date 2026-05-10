@@ -59,7 +59,8 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
           aria-describedby="unlock-pw-help"
         />
         <button type="submit" className="primary" disabled={busy || pw.length === 0}>
-          {busy ? '복호화 중…' : '잠금 해제'}
+          {busy && <span className="spinner" aria-hidden="true" />}
+          {busy ? '확인 중…' : '잠금 해제'}
         </button>
       </form>
       {error && <p className="error" role="alert">⚠ {error}</p>}

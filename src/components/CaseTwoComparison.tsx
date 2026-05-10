@@ -48,7 +48,7 @@ export function CaseTwoComparison({
         <button onClick={onToggle}>접기</button>
       </div>
       {unavailable ? (
-        <p className="muted">AS-IS와 TO-BE 양쪽 모두 입력이 충분해야 비교가 표시됩니다.</p>
+        <p className="empty-note">AS-IS와 TO-BE 양쪽 모두 유효한 값이 있어야 비교가 표시됩니다.</p>
       ) : (
         <div className="delta-cards">
           <DeltaCard

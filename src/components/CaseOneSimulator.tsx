@@ -32,13 +32,13 @@ export function CaseOneSimulator({ asIs, asIsBreakdown, db }: Props) {
 
 function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
   if (!asIs.grade || asIs.thickness == null || asIs.partVolume == null) {
-    return <p className="muted">강종/두께/체적을 입력하면 표시됩니다.</p>;
+    return <p className="empty-note">강종, 두께, 체적을 입력하면 두께 변경 후보가 표시됩니다.</p>;
   }
   if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
-    return <p className="muted">시뮬레이션을 보려면 AS-IS 입력을 먼저 유효하게 채워주세요.</p>;
+    return <p className="empty-note">시뮬레이션을 보려면 AS-IS 입력 오류를 먼저 해결하세요.</p>;
   }
   const variants = simulateThicknessChange(asIs, asIsBreakdown, db);
-  if (variants.length === 0) return <p className="muted">동일 강종 두께 데이터가 없습니다.</p>;
+  if (variants.length === 0) return <p className="empty-note">동일 강종 두께 데이터가 없습니다.</p>;
   return (
     <div className="table-scroll">
       <table className="variant-table">
@@ -99,13 +99,13 @@ function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
 
 function MaterialTable({ asIs, asIsBreakdown, db }: Props) {
   if (!asIs.grade || asIs.thickness == null) {
-    return <p className="muted">강종/두께를 입력하면 표시됩니다.</p>;
+    return <p className="empty-note">강종과 두께를 입력하면 강종 변경 후보가 표시됩니다.</p>;
   }
   if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
-    return <p className="muted">시뮬레이션을 보려면 AS-IS 입력을 먼저 유효하게 채워주세요.</p>;
+    return <p className="empty-note">시뮬레이션을 보려면 AS-IS 입력 오류를 먼저 해결하세요.</p>;
   }
   const variants = simulateMaterialChange(asIs, asIsBreakdown, db);
-  if (variants.length === 0) return <p className="muted">동일 두께를 가진 강종 후보가 없습니다.</p>;
+  if (variants.length === 0) return <p className="empty-note">동일 두께를 가진 강종 후보가 없습니다.</p>;
   return (
     <div className="table-scroll">
       <table className="variant-table">

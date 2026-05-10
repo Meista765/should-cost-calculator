@@ -24,8 +24,11 @@ function NumberInput(props: {
   onChange: (v: number | undefined) => void;
   step?: number;
   min?: number;
+  placeholder?: string;
+  hint?: string;
 }) {
-  const { label, unit, value, onChange, step = 0.1, min = 0 } = props;
+  const { label, unit, value, onChange, step = 0.1, min = 0, placeholder, hint } = props;
+  const hasRangeError = value != null && value < min;
   return (
     <label className="field">
       <span className="field-label">
@@ -38,7 +41,12 @@ function NumberInput(props: {
         min={min}
         value={value ?? ''}
         onChange={(e) => onChange(parseFiniteNumber(e.target.value))}
+        placeholder={placeholder}
+        inputMode="decimal"
+        className={hasRangeError ? 'input-invalid' : undefined}
+        aria-invalid={hasRangeError}
       />
+      {hint && <span className="field-hint">{hint}</span>}
     </label>
   );
 }
@@ -60,8 +68,9 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             <select
               value={value.grade ?? ''}
               onChange={(e) => onPatch({ grade: e.target.value || undefined })}
+              aria-label={`${title} 강종`}
             >
-              <option value="">선택…</option>
+              <option value="">강종 선택</option>
               {grades.map((g) => (
                 <option key={g.grade} value={g.grade}>
                   {g.displayName}
@@ -71,16 +80,18 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             </select>
           </label>
           <NumberInput
-            label="폭"
+            label="코일 폭"
             unit="mm"
             value={value.width}
             onChange={(v) => onPatch({ width: v })}
+            placeholder="예: 120"
           />
           <NumberInput
             label="피치"
             unit="mm"
             value={value.pitch}
             onChange={(v) => onPatch({ pitch: v })}
+            placeholder="예: 80"
           />
           <NumberInput
             label="두께"
@@ -88,6 +99,7 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             value={value.thickness}
             step={0.05}
             onChange={(v) => onPatch({ thickness: v })}
+            placeholder="예: 1.2"
           />
           <label className="field">
             <span className="field-label">
@@ -106,7 +118,11 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
                     next == null ? undefined : Math.min(1, Math.max(0, next / 100)),
                 });
               }}
+              placeholder="예: 90"
+              inputMode="decimal"
+              aria-label={`${title} 스크랩 회수율`}
             />
+            <span className="field-hint">0~100 범위로 입력</span>
           </label>
         </div>
       </fieldset>
@@ -119,18 +135,24 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             unit="mm"
             value={value.partWidth}
             onChange={(v) => onPatch({ partWidth: v })}
+            placeholder="선택 입력"
+            hint="참고용"
           />
           <NumberInput
             label="길이"
             unit="mm"
             value={value.partLength}
             onChange={(v) => onPatch({ partLength: v })}
+            placeholder="선택 입력"
+            hint="참고용"
           />
           <NumberInput
             label="높이"
             unit="mm"
             value={value.partHeight}
             onChange={(v) => onPatch({ partHeight: v })}
+            placeholder="선택 입력"
+            hint="참고용"
           />
           <NumberInput
             label="표면적"
@@ -138,6 +160,8 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             value={value.surfaceArea}
             step={1}
             onChange={(v) => onPatch({ surfaceArea: v })}
+            placeholder="선택 입력"
+            hint="참고용"
           />
           <NumberInput
             label="체적"
@@ -145,6 +169,7 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
             value={value.partVolume}
             step={1}
             onChange={(v) => onPatch({ partVolume: v })}
+            placeholder="예: 15000"
           />
         </div>
       </fieldset>
