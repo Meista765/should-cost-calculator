@@ -27,7 +27,7 @@ jobs:
       - run: npm ci
       # 테스트는 로컬에서만 실행한다 — CI runner에는 Data/*.md(대외비)가 없어 의도적으로 스킵.
       - run: npm run build
-      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6.0.0
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
         with:
           path: ./dist
