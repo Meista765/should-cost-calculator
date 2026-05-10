@@ -23,6 +23,13 @@ export function ResultsPanel({ title, breakdown }: Props) {
         <Row label="가공비" value={formatKRW(breakdown.processCost)} />
         <Row label="총원가 (KRW/EA)" value={formatKRW(breakdown.totalCost)} strong />
       </div>
+      {breakdown.errors.length > 0 && (
+        <ul className="errors-list" role="alert">
+          {breakdown.errors.map((e, i) => (
+            <li key={i}>{e}</li>
+          ))}
+        </ul>
+      )}
       {breakdown.warnings.length > 0 && (
         <ul className="warnings">
           {breakdown.warnings.map((w, i) => (

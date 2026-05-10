@@ -21,6 +21,7 @@ const EMPTY_BREAKDOWN: CostBreakdown = {
   processCost: 0,
   totalCost: 0,
   warnings: [],
+  errors: [],
 };
 
 export function App() {

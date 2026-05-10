@@ -62,6 +62,7 @@ export type CostBreakdown = {
   processCost: number;
   totalCost: number;
   warnings: string[];
+  errors: string[];   // 사용자 입력 오류 (예: 원소재 중량 < 제품 중량)
   unavailable?: { reason: 'no-grade' | 'out-of-range' | 'missing-input'; message: string };
 };
 

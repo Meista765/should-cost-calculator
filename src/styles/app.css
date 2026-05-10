@@ -343,6 +343,17 @@ button.primary:hover { background: #1f4dbe; }
   margin-top: 10px;
 }
 
+.errors-list {
+  margin: 12px 0 0;
+  padding: 8px 12px 8px 28px;
+  list-style: disc;
+  color: var(--up);
+  background: #fef0f1;
+  border: 1px solid #f4cdd1;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
 .pw-form {
   display: flex;
   gap: 8px;
@@ -378,24 +389,74 @@ button.primary:hover { background: #1f4dbe; }
 
   .grid-3 { grid-template-columns: 1fr 1fr; }
 
-  /* 표는 가로 스크롤로 보존하되 폰트 살짝 줄임 */
+  /* 시뮬레이션 표는 가로 스크롤 유지 */
   .variant-table th,
-  .variant-table td,
-  .process-table th,
-  .process-table td {
+  .variant-table td {
     padding: 6px 8px;
     font-size: 12px;
   }
-  .variant-table thead th,
-  .process-table thead th {
-    font-size: 11px;
+  .variant-table thead th { font-size: 11px; }
+
+  /* === 공정 표를 카드 형태로 전환 === */
+  .processes .table-scroll {
+    border: none;
+    overflow: visible;
+    border-radius: 0;
+  }
+  .process-table,
+  .process-table thead,
+  .process-table tbody,
+  .process-table tr,
+  .process-table td {
+    display: block;
+    width: 100%;
+  }
+  .process-table thead { display: none; }
+  .process-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: var(--card);
+  }
+  .process-table tbody tr:last-child { margin-bottom: 0; }
+  .process-table td {
+    border: none !important;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    text-align: left !important;
+    white-space: normal;
+  }
+  .process-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 84px;
+    flex-shrink: 0;
+  }
+  .process-table td.process-index {
+    font-weight: 700;
+    border-bottom: 1px solid var(--border) !important;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    text-align: left !important;
+  }
+  .process-table td.process-index::before { content: ''; min-width: 0; }
+  .process-table td > select,
+  .process-table td > input {
+    width: auto;
+    flex: 1;
+    min-width: 0;
   }
 
   .delta-cards { grid-template-columns: 1fr; }
   .delta-card { padding: 10px 12px; }
   .dc-delta { font-size: 15px; }
 
-  /* 헤더 잠금 버튼이 새 줄로 떨어지도록 */
   header .spacer { display: none; }
   header { gap: 8px; }
 }

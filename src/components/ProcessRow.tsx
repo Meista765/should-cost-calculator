@@ -15,8 +15,8 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
 
   return (
     <tr>
-      <td className="num">{index + 1}</td>
-      <td>
+      <td className="num process-index" data-label="공정">{`#${index + 1}`}</td>
+      <td data-label="구분">
         <select
           value={value.kind}
           onChange={(e) => onChange({ kind: e.target.value as PressKind })}
@@ -25,7 +25,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
           <option value="단발">단발</option>
         </select>
       </td>
-      <td>
+      <td data-label="톤수">
         <select
           value={value.tonnage}
           onChange={(e) => onChange({ tonnage: Number(e.target.value) })}
@@ -37,7 +37,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
           ))}
         </select>
       </td>
-      <td>
+      <td data-label="UPH (EA/hr)">
         <input
           type="number"
           min={1}
@@ -45,7 +45,7 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
           onChange={(e) => onChange({ uph: Number(e.target.value) })}
         />
       </td>
-      <td>
+      <td data-label="직종">
         <select
           value={value.workerRole}
           onChange={(e) => onChange({ workerRole: e.target.value })}

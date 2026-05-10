@@ -76,6 +76,7 @@ export function calcProcessCost(rows: ProcessInput[], db: Db): {
 
 export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
   const warnings: string[] = [];
+  const errors: string[] = [];
   const empty: CostBreakdown = {
     rawWeightKg: 0,
     partWeightKg: 0,
@@ -84,6 +85,7 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     processCost: 0,
     totalCost: 0,
     warnings,
+    errors,
   };
 
   if (
@@ -129,6 +131,15 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     gravityInfo.gravity,
   );
   const partWeightKg = calcPartWeight(input.partVolume, gravityInfo.gravity);
+
+  if (rawWeightKg < partWeightKg) {
+    errors.push(
+      `원소재 중량(${rawWeightKg.toFixed(4)} kg)이 제품 중량(${partWeightKg.toFixed(
+        4,
+      )} kg)보다 작습니다. 폭·피치·두께 또는 체적 입력을 확인하세요. (스크랩 중량은 0으로 처리됩니다)`,
+    );
+  }
+
   const scrapWeightKg = calcScrapWeight(rawWeightKg, partWeightKg, input.scrapRecovery);
   const materialCost = calcMaterialCost(
     rawWeightKg,
@@ -148,5 +159,6 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     processCost: proc.total,
     totalCost: materialCost + proc.total,
     warnings,
+    errors,
   };
 }
