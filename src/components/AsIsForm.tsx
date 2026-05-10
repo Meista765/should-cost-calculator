@@ -1,5 +1,5 @@
 import type { Db, FormSlice, ProcessInput } from '../types/domain';
-import { listAllGrades } from '../lib/lookup';
+import { listAllGrades, lookupGravity } from '../lib/lookup';
 import { ProcessRowList } from './ProcessRowList';
 
 type Props = {
@@ -38,7 +38,10 @@ function NumberInput(props: {
 }
 
 export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProcess, db }: Props) {
-  const grades = listAllGrades(db);
+  const grades = listAllGrades(db).map((g) => ({
+    ...g,
+    gravity: lookupGravity(g.grade, db)?.gravity,
+  }));
   return (
     <section className="form-card">
       <h2>{title}</h2>
@@ -56,6 +59,7 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
               {grades.map((g) => (
                 <option key={g.grade} value={g.grade}>
                   {g.displayName}
+                  {g.gravity != null ? ` (비중 ${g.gravity})` : ''}
                 </option>
               ))}
             </select>

@@ -1,9 +1,12 @@
 import type { CostBreakdown, Db, FormSlice } from '../types/domain';
 import { simulateMaterialChange, simulateThicknessChange } from '../lib/simulate';
-import { formatKRW, formatKg } from '../lib/format';
+import { lookupGravity } from '../lib/lookup';
+import { formatKRW, formatKg, formatPercent } from '../lib/format';
 import { DeltaBadge } from './DeltaBadge';
 
 type Props = { asIs: FormSlice; asIsBreakdown: CostBreakdown; db: Db };
+
+const volFmt = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 });
 
 export function CaseOneSimulator({ asIs, asIsBreakdown, db }: Props) {
   return (
@@ -21,7 +24,7 @@ export function CaseOneSimulator({ asIs, asIsBreakdown, db }: Props) {
       <MaterialTable asIs={asIs} asIsBreakdown={asIsBreakdown} db={db} />
 
       <p className="footnote">
-        * 두께 변경 시 폭/피치는 그대로 유지하고 체적만 두께 비율로 보정합니다.
+        * 두께 변경 시 폭/피치는 그대로 유지하고 체적만 두께 비율로 보정합니다 (V = V₀ / t₀ × t).
       </p>
     </section>
   );
@@ -34,45 +37,59 @@ function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
   const variants = simulateThicknessChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 강종 두께 데이터가 없습니다.</p>;
   return (
-    <table className="variant-table">
-      <thead>
-        <tr>
-          <th>두께(mm)</th>
-          <th>원소재 중량</th>
-          <th>재료비</th>
-          <th>가공비</th>
-          <th>총원가</th>
-          <th>vs AS-IS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {variants.map((v) => {
-          const isCurrent = v.thickness === asIs.thickness;
-          if (v.breakdown.unavailable) {
+    <div className="table-scroll">
+      <table className="variant-table">
+        <thead>
+          <tr>
+            <th>두께(mm)</th>
+            <th>추정 체적(mm³)</th>
+            <th>체적 변화</th>
+            <th>원소재 중량</th>
+            <th>재료비</th>
+            <th>가공비</th>
+            <th>총원가</th>
+            <th>vs AS-IS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map((v) => {
+            const isCurrent = v.thickness === asIs.thickness;
+            if (v.breakdown.unavailable) {
+              return (
+                <tr key={v.thickness} className={isCurrent ? 'current' : ''}>
+                  <td className="num">{v.thickness}</td>
+                  <td className="num">{volFmt.format(Math.round(v.estimatedVolume))}</td>
+                  <td className="num">{formatPercent(v.deltaVolumeRatio)}</td>
+                  <td colSpan={5} className="muted">
+                    {v.breakdown.unavailable.message}
+                  </td>
+                </tr>
+              );
+            }
             return (
               <tr key={v.thickness} className={isCurrent ? 'current' : ''}>
                 <td className="num">{v.thickness}</td>
-                <td colSpan={5} className="muted">
-                  {v.breakdown.unavailable.message}
+                <td className="num">{volFmt.format(Math.round(v.estimatedVolume))}</td>
+                <td className="num">
+                  {isCurrent ? (
+                    <span className="muted">현재</span>
+                  ) : (
+                    formatPercent(v.deltaVolumeRatio)
+                  )}
+                </td>
+                <td className="num">{formatKg(v.breakdown.rawWeightKg)}</td>
+                <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
+                <td className="num">{formatKRW(v.breakdown.processCost)}</td>
+                <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
+                <td className="num">
+                  {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
                 </td>
               </tr>
             );
-          }
-          return (
-            <tr key={v.thickness} className={isCurrent ? 'current' : ''}>
-              <td className="num">{v.thickness}</td>
-              <td className="num">{formatKg(v.breakdown.rawWeightKg)}</td>
-              <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
-              <td className="num">{formatKRW(v.breakdown.processCost)}</td>
-              <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
-              <td className="num">
-                {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -83,40 +100,45 @@ function MaterialTable({ asIs, asIsBreakdown, db }: Props) {
   const variants = simulateMaterialChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 두께를 가진 강종 후보가 없습니다.</p>;
   return (
-    <table className="variant-table">
-      <thead>
-        <tr>
-          <th>강종</th>
-          <th>재료비</th>
-          <th>가공비</th>
-          <th>총원가</th>
-          <th>vs AS-IS</th>
-          <th>비고</th>
-        </tr>
-      </thead>
-      <tbody>
-        {variants.map((v) => {
-          const isCurrent = v.grade === asIs.grade;
-          return (
-            <tr key={v.grade} className={isCurrent ? 'current' : ''}>
-              <td>{v.displayName}</td>
-              <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
-              <td className="num">{formatKRW(v.breakdown.processCost)}</td>
-              <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
-              <td className="num">
-                {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
-              </td>
-              <td>
-                {v.method === 'interpolate' ? (
-                  <span className="badge badge-warn">보간 추정</span>
-                ) : (
-                  <span className="badge badge-ok">exact</span>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="table-scroll">
+      <table className="variant-table">
+        <thead>
+          <tr>
+            <th>강종</th>
+            <th>비중(g/cm³)</th>
+            <th>재료비</th>
+            <th>가공비</th>
+            <th>총원가</th>
+            <th>vs AS-IS</th>
+            <th>비고</th>
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map((v) => {
+            const isCurrent = v.grade === asIs.grade;
+            const gravityInfo = lookupGravity(v.grade, db);
+            return (
+              <tr key={v.grade} className={isCurrent ? 'current' : ''}>
+                <td>{v.displayName}</td>
+                <td className="num">{gravityInfo ? gravityInfo.gravity.toFixed(2) : '—'}</td>
+                <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
+                <td className="num">{formatKRW(v.breakdown.processCost)}</td>
+                <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
+                <td className="num">
+                  {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
+                </td>
+                <td>
+                  {v.method === 'interpolate' ? (
+                    <span className="badge badge-warn">보간 추정</span>
+                  ) : (
+                    <span className="badge badge-ok">exact</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

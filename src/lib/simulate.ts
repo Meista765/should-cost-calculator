@@ -5,6 +5,8 @@ import { gradesAvailableForThickness, thicknessOptionsFor } from './lookup';
 
 export type ThicknessVariant = {
   thickness: number;
+  estimatedVolume: number;   // V0 / t0 * t (mm³)
+  deltaVolumeRatio: number;  // (estimatedVolume - V0) / V0 = (t - t0) / t0
   method: 'exact' | 'interpolate';
   breakdown: CostBreakdown;
   deltaTotal: number;
@@ -28,6 +30,8 @@ export function simulateThicknessChange(
       const breakdown = computeBreakdown(variant, db);
       return {
         thickness: t,
+        estimatedVolume: scaledVolume,
+        deltaVolumeRatio: (t - t0) / t0,
         method: 'exact' as const,
         breakdown,
         deltaTotal: breakdown.totalCost - asIsBreakdown.totalCost,
