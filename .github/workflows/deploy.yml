@@ -24,7 +24,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm test
+      # 테스트는 로컬에서만 실행한다 — CI runner에는 Data/*.md(대외비)가 없어 의도적으로 스킵.
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
