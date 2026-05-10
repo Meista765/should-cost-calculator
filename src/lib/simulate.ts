@@ -20,6 +20,9 @@ export function simulateThicknessChange(
   db: Db,
 ): ThicknessVariant[] {
   if (!asIs.grade || asIs.thickness == null || asIs.partVolume == null) return [];
+  if (!Number.isFinite(asIs.thickness) || asIs.thickness <= 0 || !Number.isFinite(asIs.partVolume)) {
+    return [];
+  }
   const t0 = asIs.thickness;
   const v0 = asIs.partVolume;
   const options = thicknessOptionsFor(asIs.grade, db);
@@ -57,6 +60,7 @@ export function simulateMaterialChange(
   db: Db,
 ): MaterialVariant[] {
   if (!asIs.grade || asIs.thickness == null) return [];
+  if (!Number.isFinite(asIs.thickness) || asIs.thickness <= 0) return [];
   const candidates = gradesAvailableForThickness(asIs.thickness, db, 'interpolate');
   return candidates
     .map((c) => {

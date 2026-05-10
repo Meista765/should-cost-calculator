@@ -8,6 +8,12 @@ type Props = {
   db: Db;
 };
 
+function parseFiniteNumber(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined;
+  const next = Number(raw);
+  return Number.isFinite(next) ? next : undefined;
+}
+
 export function ProcessRow({ index, value, onChange, db }: Props) {
   const tonnages = [...new Set(db.press.filter((p) => p.kind === value.kind).map((p) => p.tonnage))]
     .sort((a, b) => a - b);
@@ -19,7 +25,11 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
       <td data-label="구분">
         <select
           value={value.kind}
-          onChange={(e) => onChange({ kind: e.target.value as PressKind })}
+          onChange={(e) => {
+            const kind = e.target.value as PressKind;
+            const firstTonnage = db.press.find((p) => p.kind === kind)?.tonnage;
+            onChange({ kind, ...(firstTonnage == null ? {} : { tonnage: firstTonnage }) });
+          }}
         >
           <option value="프로">프로</option>
           <option value="단발">단발</option>
@@ -28,7 +38,10 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
       <td data-label="톤수">
         <select
           value={value.tonnage}
-          onChange={(e) => onChange({ tonnage: Number(e.target.value) })}
+          onChange={(e) => {
+            const tonnage = parseFiniteNumber(e.target.value);
+            if (tonnage != null) onChange({ tonnage });
+          }}
         >
           {tonnages.map((t) => (
             <option key={t} value={t}>
@@ -41,8 +54,8 @@ export function ProcessRow({ index, value, onChange, db }: Props) {
         <input
           type="number"
           min={1}
-          value={value.uph}
-          onChange={(e) => onChange({ uph: Number(e.target.value) })}
+          value={value.uph ?? ''}
+          onChange={(e) => onChange({ uph: parseFiniteNumber(e.target.value) })}
         />
       </td>
       <td data-label="직종">

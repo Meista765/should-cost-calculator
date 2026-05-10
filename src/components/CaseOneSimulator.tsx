@@ -34,6 +34,9 @@ function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
   if (!asIs.grade || asIs.thickness == null || asIs.partVolume == null) {
     return <p className="muted">강종/두께/체적을 입력하면 표시됩니다.</p>;
   }
+  if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
+    return <p className="muted">AS-IS input must be valid before simulation.</p>;
+  }
   const variants = simulateThicknessChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 강종 두께 데이터가 없습니다.</p>;
   return (
@@ -96,6 +99,9 @@ function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
 function MaterialTable({ asIs, asIsBreakdown, db }: Props) {
   if (!asIs.grade || asIs.thickness == null) {
     return <p className="muted">강종/두께를 입력하면 표시됩니다.</p>;
+  }
+  if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
+    return <p className="muted">AS-IS input must be valid before simulation.</p>;
   }
   const variants = simulateMaterialChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 두께를 가진 강종 후보가 없습니다.</p>;

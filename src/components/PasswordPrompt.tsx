@@ -14,7 +14,12 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
+    if (pw.length === 0) {
+      setError('Enter the password.');
+      return;
+    }
     setBusy(true);
     try {
       const db = await decryptDb(bundle, pw);

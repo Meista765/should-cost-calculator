@@ -39,17 +39,18 @@ export const initialState: AppState = {
 };
 
 function adjustProcessLength(slice: FormSlice, count: number): FormSlice {
+  const safeCount = Number.isFinite(count) ? Math.min(20, Math.max(1, Math.trunc(count))) : 1;
   const cur = slice.processes;
   let next: ProcessInput[];
-  if (count > cur.length) {
+  if (safeCount > cur.length) {
     next = [...cur];
-    while (next.length < count) next.push(defaultProcess());
-  } else if (count < cur.length) {
-    next = cur.slice(0, count);
+    while (next.length < safeCount) next.push(defaultProcess());
+  } else if (safeCount < cur.length) {
+    next = cur.slice(0, safeCount);
   } else {
     next = cur;
   }
-  return { ...slice, processCount: count, processes: next };
+  return { ...slice, processCount: safeCount, processes: next };
 }
 
 function patchProcess(

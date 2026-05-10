@@ -13,6 +13,30 @@ import type { CostBreakdown, Db } from '../types/domain';
 const bundle = encryptedJson as EncryptedBundle;
 const PW_CACHE_KEY = 'should-cost-pw-v1';
 
+function getCachedPassword(): string | null {
+  try {
+    return sessionStorage.getItem(PW_CACHE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setCachedPassword(password: string): void {
+  try {
+    sessionStorage.setItem(PW_CACHE_KEY, password);
+  } catch {
+    // Storage may be unavailable in restricted browser modes; unlock should still work.
+  }
+}
+
+function clearCachedPassword(): void {
+  try {
+    sessionStorage.removeItem(PW_CACHE_KEY);
+  } catch {
+    // Storage may be unavailable in restricted browser modes; locking should still work.
+  }
+}
+
 const EMPTY_BREAKDOWN: CostBreakdown = {
   rawWeightKg: 0,
   partWeightKg: 0,
@@ -31,14 +55,14 @@ export function App() {
 
   // 같은 탭 세션 동안 자동 잠금 해제
   useEffect(() => {
-    const cached = sessionStorage.getItem(PW_CACHE_KEY);
+    const cached = getCachedPassword();
     if (!cached) {
       setAutoUnlocking(false);
       return;
     }
     decryptDb(bundle, cached)
       .then(setDb)
-      .catch(() => sessionStorage.removeItem(PW_CACHE_KEY))
+      .catch(clearCachedPassword)
       .finally(() => setAutoUnlocking(false));
   }, []);
 
@@ -74,7 +98,7 @@ export function App() {
           <PasswordPrompt
             bundle={bundle}
             onUnlocked={(loaded, password) => {
-              sessionStorage.setItem(PW_CACHE_KEY, password);
+              setCachedPassword(password);
               setDb(loaded);
             }}
           />
@@ -93,7 +117,7 @@ export function App() {
         <div className="spacer" />
         <button
           onClick={() => {
-            sessionStorage.removeItem(PW_CACHE_KEY);
+            clearCachedPassword();
             setDb(null);
           }}
         >

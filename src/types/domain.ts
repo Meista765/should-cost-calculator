@@ -35,7 +35,7 @@ export type Db = {
 export type ProcessInput = {
   kind: PressKind;
   tonnage: number;
-  uph: number;
+  uph?: number;
   workerRole: string;
 };
 
@@ -43,7 +43,7 @@ export type FormSlice = {
   width?: number;
   pitch?: number;
   thickness?: number;
-  scrapRecovery: number;
+  scrapRecovery?: number;
   partVolume?: number;
   partWidth?: number;
   partLength?: number;

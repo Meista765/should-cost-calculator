@@ -33,7 +33,11 @@ export function CaseTwoComparison({
   const procDelta = toBeBreakdown.processCost - asIsBreakdown.processCost;
   const totalDelta = toBeBreakdown.totalCost - asIsBreakdown.totalCost;
 
-  const unavailable = asIsBreakdown.unavailable || toBeBreakdown.unavailable;
+  const unavailable =
+    asIsBreakdown.unavailable ||
+    toBeBreakdown.unavailable ||
+    asIsBreakdown.errors.length > 0 ||
+    toBeBreakdown.errors.length > 0;
 
   return (
     <section className="case-card">

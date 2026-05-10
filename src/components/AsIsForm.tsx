@@ -11,6 +11,12 @@ type Props = {
   db: Db;
 };
 
+function parseFiniteNumber(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined;
+  const next = Number(raw);
+  return Number.isFinite(next) ? next : undefined;
+}
+
 function NumberInput(props: {
   label: string;
   unit?: string;
@@ -19,7 +25,7 @@ function NumberInput(props: {
   step?: number;
   min?: number;
 }) {
-  const { label, unit, value, onChange, step = 0.1, min } = props;
+  const { label, unit, value, onChange, step = 0.1, min = 0 } = props;
   return (
     <label className="field">
       <span className="field-label">
@@ -31,7 +37,7 @@ function NumberInput(props: {
         step={step}
         min={min}
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+        onChange={(e) => onChange(parseFiniteNumber(e.target.value))}
       />
     </label>
   );
@@ -92,10 +98,14 @@ export function AsIsForm({ title, value, onPatch, onSetProcessCount, onPatchProc
               min={0}
               max={100}
               step={1}
-              value={value.scrapRecovery * 100}
-              onChange={(e) =>
-                onPatch({ scrapRecovery: Math.min(1, Math.max(0, Number(e.target.value) / 100)) })
-              }
+              value={value.scrapRecovery == null ? '' : value.scrapRecovery * 100}
+              onChange={(e) => {
+                const next = parseFiniteNumber(e.target.value);
+                onPatch({
+                  scrapRecovery:
+                    next == null ? undefined : Math.min(1, Math.max(0, next / 100)),
+                });
+              }}
             />
           </label>
         </div>

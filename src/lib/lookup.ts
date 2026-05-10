@@ -54,6 +54,7 @@ export function interpolateCoilPrice(
   thickness: number,
   db: Db,
 ): InterpolateResult {
+  if (!Number.isFinite(thickness)) return { method: 'unavailable', reason: 'out-of-range' };
   const rows = db.coil
     .filter((r) => r.grade === grade)
     .sort((a, b) => a.thickness - b.thickness);

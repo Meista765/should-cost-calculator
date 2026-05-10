@@ -47,20 +47,27 @@ export function calcOneProcessCost(
   workerRate: number,
   uph: number,
 ): number {
-  if (uph <= 0) return Number.NaN;
+  if (!Number.isFinite(uph) || uph <= 0) return Number.NaN;
   return (machineRate + workerRate) / uph;
 }
 
 export function calcProcessCost(rows: ProcessInput[], db: Db): {
   total: number;
   warnings: string[];
+  errors: string[];
 } {
   const warnings: string[] = [];
+  const errors: string[] = [];
   let total = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const machine = lookupPressRate(row.kind, row.tonnage, db);
     const worker = lookupWorkerRate(row.workerRole, db);
+    const uph = row.uph;
+    if (!Number.isFinite(uph) || uph == null || uph <= 0) {
+      errors.push(`Process ${i + 1}: enter a UPH greater than 0.`);
+      continue;
+    }
     if (machine === undefined) {
       warnings.push(`공정 ${i + 1}: ${row.kind} ${row.tonnage}톤 설비임율 정보 없음`);
       continue;
@@ -69,9 +76,27 @@ export function calcProcessCost(rows: ProcessInput[], db: Db): {
       warnings.push(`공정 ${i + 1}: ${row.workerRole} 노무임율 정보 없음`);
       continue;
     }
-    total += calcOneProcessCost(machine, worker, row.uph);
+    total += calcOneProcessCost(machine, worker, uph);
   }
-  return { total, warnings };
+  return { total, warnings, errors };
+}
+
+function hasInvalidRequiredNumber(input: FormSlice): boolean {
+  return (
+    !Number.isFinite(input.width) ||
+    !Number.isFinite(input.pitch) ||
+    !Number.isFinite(input.thickness) ||
+    !Number.isFinite(input.partVolume) ||
+    !Number.isFinite(input.scrapRecovery)
+  );
+}
+
+function hasNonPositiveRequiredNumber(input: FormSlice): boolean {
+  return input.width! <= 0 || input.pitch! <= 0 || input.thickness! <= 0 || input.partVolume! <= 0;
+}
+
+function hasOutOfRangeRecovery(input: FormSlice): boolean {
+  return input.scrapRecovery! < 0 || input.scrapRecovery! > 1;
 }
 
 export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
@@ -93,11 +118,31 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     input.pitch == null ||
     input.thickness == null ||
     input.partVolume == null ||
+    input.scrapRecovery == null ||
     !input.grade
   ) {
     return {
       ...empty,
       unavailable: { reason: 'missing-input', message: '재료비 계산을 위해 폭/피치/두께/체적/강종을 입력하세요.' },
+    };
+  }
+
+  if (hasInvalidRequiredNumber(input)) {
+    return {
+      ...empty,
+      unavailable: { reason: 'missing-input', message: 'Enter finite numeric values before calculating.' },
+    };
+  }
+  if (hasNonPositiveRequiredNumber(input)) {
+    return {
+      ...empty,
+      unavailable: { reason: 'missing-input', message: 'Width, pitch, thickness, and volume must be greater than 0.' },
+    };
+  }
+  if (hasOutOfRangeRecovery(input)) {
+    return {
+      ...empty,
+      unavailable: { reason: 'missing-input', message: 'Scrap recovery must be between 0% and 100%.' },
     };
   }
 
@@ -131,6 +176,12 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     gravityInfo.gravity,
   );
   const partWeightKg = calcPartWeight(input.partVolume, gravityInfo.gravity);
+  if (!Number.isFinite(rawWeightKg) || !Number.isFinite(partWeightKg)) {
+    return {
+      ...empty,
+      unavailable: { reason: 'missing-input', message: 'Input values are too large to calculate.' },
+    };
+  }
 
   if (rawWeightKg < partWeightKg) {
     errors.push(
@@ -140,7 +191,7 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     );
   }
 
-  const scrapWeightKg = calcScrapWeight(rawWeightKg, partWeightKg, input.scrapRecovery);
+  const scrapWeightKg = calcScrapWeight(rawWeightKg, partWeightKg, input.scrapRecovery!);
   const materialCost = calcMaterialCost(
     rawWeightKg,
     priceInfo.coilPrice,
@@ -150,6 +201,13 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
 
   const proc = calcProcessCost(input.processes, db);
   warnings.push(...proc.warnings);
+  errors.push(...proc.errors);
+  if (!Number.isFinite(materialCost) || !Number.isFinite(proc.total)) {
+    return {
+      ...empty,
+      unavailable: { reason: 'missing-input', message: 'Input values are too large to calculate.' },
+    };
+  }
 
   return {
     rawWeightKg,
