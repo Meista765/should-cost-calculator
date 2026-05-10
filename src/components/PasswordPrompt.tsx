@@ -4,7 +4,7 @@ import type { Db } from '../types/domain';
 
 type Props = {
   bundle: EncryptedBundle;
-  onUnlocked: (db: Db, password: string) => void;
+  onUnlocked: (db: Db) => void;
 };
 
 export function PasswordPrompt({ bundle, onUnlocked }: Props) {
@@ -23,7 +23,9 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
     setBusy(true);
     try {
       const db = await decryptDb(bundle, pw);
-      onUnlocked(db, pw);
+      // 비밀번호는 어디에도 보관하지 않는다. 사용 직후 메모리에서 폐기.
+      setPw('');
+      onUnlocked(db);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -48,6 +50,8 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
           placeholder="비밀번호"
           autoFocus
           disabled={busy}
+          autoComplete="off"
+          spellCheck={false}
         />
         <button type="submit" className="primary" disabled={busy || pw.length === 0}>
           {busy ? '복호화 중…' : '잠금 해제'}
@@ -57,7 +61,7 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
       <p className="footnote muted">
         데이터 갱신 시각: {encryptedAt}
         <br />
-        같은 탭이 열려 있는 동안에는 자동 잠금 해제 상태로 유지됩니다(sessionStorage).
+        보안 강화를 위해 비밀번호는 캐시되지 않습니다. 새로고침/탭 전환 시 다시 입력해야 합니다.
       </p>
     </section>
   );

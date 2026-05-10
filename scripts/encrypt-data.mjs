@@ -24,10 +24,23 @@ if (!password) {
   console.error('  bash:        export BUILD_DB_PASSWORD=your-password');
   process.exit(1);
 }
-if (password.length < 8) {
-  console.error('비밀번호는 최소 8자 이상이어야 합니다.');
-  process.exit(1);
+
+// 공개 GitHub Pages에 ciphertext가 노출되므로 비밀번호 강도가 사실상 유일한 방어선이다.
+// 16자 이상 + 4종(소문자/대문자/숫자/특수문자) 모두 포함하도록 강제한다.
+function assertStrongPassword(pw) {
+  const errors = [];
+  if (pw.length < 16) errors.push(`최소 16자 (현재 ${pw.length}자)`);
+  if (!/[a-z]/.test(pw)) errors.push('소문자 포함');
+  if (!/[A-Z]/.test(pw)) errors.push('대문자 포함');
+  if (!/[0-9]/.test(pw)) errors.push('숫자 포함');
+  if (!/[^A-Za-z0-9]/.test(pw)) errors.push('특수문자 포함');
+  if (errors.length > 0) {
+    console.error('BUILD_DB_PASSWORD 강도 부족: ' + errors.join(', '));
+    console.error('  공개 저장소에 ciphertext가 노출되므로 짧거나 단순한 비밀번호는 오프라인 무차별 대입에 취약합니다.');
+    process.exit(1);
+  }
 }
+assertStrongPassword(password);
 
 // === .md 파싱 (build-data.mjs와 동일 로직) ===
 function parseTable(md) {

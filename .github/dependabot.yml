@@ -1,0 +1,8 @@
+# SHA-pinned GitHub Actions still need updates. Dependabot resolves new SHAs
+# for the pinned major version tags (the trailing comment after each pin).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

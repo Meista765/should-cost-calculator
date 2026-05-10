@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { computeBreakdown } from '../lib/calc';
-import { decryptDb, type EncryptedBundle } from '../lib/crypto';
+import { type EncryptedBundle } from '../lib/crypto';
 import { initialState, reducer } from '../state/formReducer';
 import { AsIsForm } from './AsIsForm';
 import { ResultsPanel } from './ResultsPanel';
@@ -11,31 +11,6 @@ import encryptedJson from '../data/encrypted.json';
 import type { CostBreakdown, Db } from '../types/domain';
 
 const bundle = encryptedJson as EncryptedBundle;
-const PW_CACHE_KEY = 'should-cost-pw-v1';
-
-function getCachedPassword(): string | null {
-  try {
-    return sessionStorage.getItem(PW_CACHE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function setCachedPassword(password: string): void {
-  try {
-    sessionStorage.setItem(PW_CACHE_KEY, password);
-  } catch {
-    // Storage may be unavailable in restricted browser modes; unlock should still work.
-  }
-}
-
-function clearCachedPassword(): void {
-  try {
-    sessionStorage.removeItem(PW_CACHE_KEY);
-  } catch {
-    // Storage may be unavailable in restricted browser modes; locking should still work.
-  }
-}
 
 const EMPTY_BREAKDOWN: CostBreakdown = {
   rawWeightKg: 0,
@@ -48,23 +23,30 @@ const EMPTY_BREAKDOWN: CostBreakdown = {
   errors: [],
 };
 
+// 이전 버전에서 sessionStorage에 비밀번호를 캐시하던 흔적 제거 (업그레이드 안전장치).
+const LEGACY_PW_CACHE_KEY = 'should-cost-pw-v1';
+try {
+  sessionStorage.removeItem(LEGACY_PW_CACHE_KEY);
+} catch {
+  // sessionStorage 비활성 환경에서는 무시.
+}
+
 export function App() {
   const [db, setDb] = useState<Db | null>(null);
-  const [autoUnlocking, setAutoUnlocking] = useState(true);
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // 같은 탭 세션 동안 자동 잠금 해제
+  // 탭이 백그라운드로 가거나 닫힐 때 복호화된 DB를 메모리에서 폐기.
+  // 비밀번호는 어디에도 캐시하지 않으므로 다시 입력해야 한다.
   useEffect(() => {
-    const cached = getCachedPassword();
-    if (!cached) {
-      setAutoUnlocking(false);
-      return;
-    }
-    decryptDb(bundle, cached)
-      .then(setDb)
-      .catch(clearCachedPassword)
-      .finally(() => setAutoUnlocking(false));
-  }, []);
+    if (!db) return;
+    const wipe = () => setDb(null);
+    window.addEventListener('pagehide', wipe);
+    window.addEventListener('beforeunload', wipe);
+    return () => {
+      window.removeEventListener('pagehide', wipe);
+      window.removeEventListener('beforeunload', wipe);
+    };
+  }, [db]);
 
   const asIsBreakdown = useMemo(
     () => (db ? computeBreakdown(state.asIs, db) : EMPTY_BREAKDOWN),
@@ -75,19 +57,6 @@ export function App() {
     [state.toBe, db],
   );
 
-  if (autoUnlocking) {
-    return (
-      <div className="app">
-        <header>
-          <h1>판금 프레스 Should-Cost 계산기</h1>
-        </header>
-        <main>
-          <p className="muted">잠금 해제 중…</p>
-        </main>
-      </div>
-    );
-  }
-
   if (!db) {
     return (
       <div className="app">
@@ -97,10 +66,7 @@ export function App() {
         <main>
           <PasswordPrompt
             bundle={bundle}
-            onUnlocked={(loaded, password) => {
-              setCachedPassword(password);
-              setDb(loaded);
-            }}
+            onUnlocked={(loaded) => setDb(loaded)}
           />
         </main>
       </div>
@@ -115,14 +81,7 @@ export function App() {
         <h1>판금 프레스 Should-Cost 계산기</h1>
         <span className="muted small">데이터 갱신 시각: {dataDate}</span>
         <div className="spacer" />
-        <button
-          onClick={() => {
-            clearCachedPassword();
-            setDb(null);
-          }}
-        >
-          잠금
-        </button>
+        <button onClick={() => setDb(null)}>잠금</button>
       </header>
 
       <main>
