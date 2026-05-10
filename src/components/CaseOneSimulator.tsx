@@ -1,0 +1,122 @@
+import type { CostBreakdown, Db, FormSlice } from '../types/domain';
+import { simulateMaterialChange, simulateThicknessChange } from '../lib/simulate';
+import { formatKRW, formatKg } from '../lib/format';
+import { DeltaBadge } from './DeltaBadge';
+
+type Props = { asIs: FormSlice; asIsBreakdown: CostBreakdown; db: Db };
+
+export function CaseOneSimulator({ asIs, asIsBreakdown, db }: Props) {
+  return (
+    <section className="case-card">
+      <h2>CASE 1 · 자동 시뮬레이션</h2>
+      <p className="muted">
+        AS-IS 입력값을 기준으로 ① 동일 강종에서 두께만 변경, ② 동일 두께에서 강종만 변경했을 때의
+        가격 영향을 자동으로 보여줍니다.
+      </p>
+
+      <h3>① 두께 변경 (동일 강종)</h3>
+      <ThicknessTable asIs={asIs} asIsBreakdown={asIsBreakdown} db={db} />
+
+      <h3>② 강종 변경 (동일 두께)</h3>
+      <MaterialTable asIs={asIs} asIsBreakdown={asIsBreakdown} db={db} />
+
+      <p className="footnote">
+        * 두께 변경 시 폭/피치는 그대로 유지하고 체적만 두께 비율로 보정합니다.
+      </p>
+    </section>
+  );
+}
+
+function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
+  if (!asIs.grade || asIs.thickness == null || asIs.partVolume == null) {
+    return <p className="muted">강종/두께/체적을 입력하면 표시됩니다.</p>;
+  }
+  const variants = simulateThicknessChange(asIs, asIsBreakdown, db);
+  if (variants.length === 0) return <p className="muted">동일 강종 두께 데이터가 없습니다.</p>;
+  return (
+    <table className="variant-table">
+      <thead>
+        <tr>
+          <th>두께(mm)</th>
+          <th>원소재 중량</th>
+          <th>재료비</th>
+          <th>가공비</th>
+          <th>총원가</th>
+          <th>vs AS-IS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {variants.map((v) => {
+          const isCurrent = v.thickness === asIs.thickness;
+          if (v.breakdown.unavailable) {
+            return (
+              <tr key={v.thickness} className={isCurrent ? 'current' : ''}>
+                <td className="num">{v.thickness}</td>
+                <td colSpan={5} className="muted">
+                  {v.breakdown.unavailable.message}
+                </td>
+              </tr>
+            );
+          }
+          return (
+            <tr key={v.thickness} className={isCurrent ? 'current' : ''}>
+              <td className="num">{v.thickness}</td>
+              <td className="num">{formatKg(v.breakdown.rawWeightKg)}</td>
+              <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
+              <td className="num">{formatKRW(v.breakdown.processCost)}</td>
+              <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
+              <td className="num">
+                {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function MaterialTable({ asIs, asIsBreakdown, db }: Props) {
+  if (!asIs.grade || asIs.thickness == null) {
+    return <p className="muted">강종/두께를 입력하면 표시됩니다.</p>;
+  }
+  const variants = simulateMaterialChange(asIs, asIsBreakdown, db);
+  if (variants.length === 0) return <p className="muted">동일 두께를 가진 강종 후보가 없습니다.</p>;
+  return (
+    <table className="variant-table">
+      <thead>
+        <tr>
+          <th>강종</th>
+          <th>재료비</th>
+          <th>가공비</th>
+          <th>총원가</th>
+          <th>vs AS-IS</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        {variants.map((v) => {
+          const isCurrent = v.grade === asIs.grade;
+          return (
+            <tr key={v.grade} className={isCurrent ? 'current' : ''}>
+              <td>{v.displayName}</td>
+              <td className="num">{formatKRW(v.breakdown.materialCost)}</td>
+              <td className="num">{formatKRW(v.breakdown.processCost)}</td>
+              <td className="num strong">{formatKRW(v.breakdown.totalCost)}</td>
+              <td className="num">
+                {isCurrent ? <span className="muted">현재</span> : <DeltaBadge value={v.deltaTotal} />}
+              </td>
+              <td>
+                {v.method === 'interpolate' ? (
+                  <span className="badge badge-warn">보간 추정</span>
+                ) : (
+                  <span className="badge badge-ok">exact</span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
