@@ -22,28 +22,31 @@ export function ProcessRowList({ count, rows, onSetCount, onPatchRow, db }: Prop
           ))}
         </select>
       </div>
-      <table className="process-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>구분</th>
-            <th>톤수</th>
-            <th>UPH (EA/hr)</th>
-            <th>직종</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <ProcessRow
-              key={i}
-              index={i}
-              value={r}
-              onChange={(patch) => onPatchRow(i, patch)}
-              db={db}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table className="process-table">
+          <caption className="sr-only">공정별 설비/직종/UPH 입력 표</caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">구분</th>
+              <th scope="col">톤수</th>
+              <th scope="col">UPH (EA/hr)</th>
+              <th scope="col">직종</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <ProcessRow
+                key={i}
+                index={i}
+                value={r}
+                onChange={(patch) => onPatchRow(i, patch)}
+                db={db}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

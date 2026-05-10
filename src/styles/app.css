@@ -273,12 +273,29 @@ button {
   min-height: 36px;
 }
 button:hover { background: #f3f5fa; }
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 button.primary {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
 }
 button.primary:hover { background: #1f4dbe; }
+
+/* 시각적으로 숨기되 스크린 리더에는 노출 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .delta-cards {
   display: grid;
@@ -377,6 +394,11 @@ button.primary:hover { background: #1f4dbe; }
   header .small { font-size: 11px; }
   h2 { font-size: 16px; }
   h3 { font-size: 14px; }
+
+  /* WCAG 권장 터치 타깃 (≥44×44px) */
+  input, select, button { min-height: 44px; }
+  input, select { padding: 10px 12px; }
+  button { padding: 10px 16px; }
 
   .form-card,
   .results-card,

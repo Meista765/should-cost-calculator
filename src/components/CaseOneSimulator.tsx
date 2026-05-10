@@ -35,23 +35,24 @@ function ThicknessTable({ asIs, asIsBreakdown, db }: Props) {
     return <p className="muted">강종/두께/체적을 입력하면 표시됩니다.</p>;
   }
   if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
-    return <p className="muted">AS-IS input must be valid before simulation.</p>;
+    return <p className="muted">시뮬레이션을 보려면 AS-IS 입력을 먼저 유효하게 채워주세요.</p>;
   }
   const variants = simulateThicknessChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 강종 두께 데이터가 없습니다.</p>;
   return (
     <div className="table-scroll">
       <table className="variant-table">
+        <caption className="sr-only">동일 강종에서 두께만 변경했을 때의 원가 비교</caption>
         <thead>
           <tr>
-            <th>두께(mm)</th>
-            <th>추정 체적(mm³)</th>
-            <th>체적 변화</th>
-            <th>원소재 중량</th>
-            <th>재료비</th>
-            <th>가공비</th>
-            <th>총원가</th>
-            <th>vs AS-IS</th>
+            <th scope="col">두께(mm)</th>
+            <th scope="col">추정 체적(mm³)</th>
+            <th scope="col">체적 변화</th>
+            <th scope="col">원소재 중량</th>
+            <th scope="col">재료비</th>
+            <th scope="col">가공비</th>
+            <th scope="col">총원가</th>
+            <th scope="col">vs AS-IS</th>
           </tr>
         </thead>
         <tbody>
@@ -101,22 +102,23 @@ function MaterialTable({ asIs, asIsBreakdown, db }: Props) {
     return <p className="muted">강종/두께를 입력하면 표시됩니다.</p>;
   }
   if (asIsBreakdown.unavailable || asIsBreakdown.errors.length > 0) {
-    return <p className="muted">AS-IS input must be valid before simulation.</p>;
+    return <p className="muted">시뮬레이션을 보려면 AS-IS 입력을 먼저 유효하게 채워주세요.</p>;
   }
   const variants = simulateMaterialChange(asIs, asIsBreakdown, db);
   if (variants.length === 0) return <p className="muted">동일 두께를 가진 강종 후보가 없습니다.</p>;
   return (
     <div className="table-scroll">
       <table className="variant-table">
+        <caption className="sr-only">동일 두께에서 강종만 변경했을 때의 원가 비교</caption>
         <thead>
           <tr>
-            <th>강종</th>
-            <th>비중(g/cm³)</th>
-            <th>재료비</th>
-            <th>가공비</th>
-            <th>총원가</th>
-            <th>vs AS-IS</th>
-            <th>비고</th>
+            <th scope="col">강종</th>
+            <th scope="col">비중(g/cm³)</th>
+            <th scope="col">재료비</th>
+            <th scope="col">가공비</th>
+            <th scope="col">총원가</th>
+            <th scope="col">vs AS-IS</th>
+            <th scope="col">비고</th>
           </tr>
         </thead>
         <tbody>

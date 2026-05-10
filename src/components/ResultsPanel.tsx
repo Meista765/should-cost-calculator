@@ -31,7 +31,7 @@ export function ResultsPanel({ title, breakdown }: Props) {
         </ul>
       )}
       {breakdown.warnings.length > 0 && (
-        <ul className="warnings">
+        <ul className="warnings" role="status" aria-live="polite">
           {breakdown.warnings.map((w, i) => (
             <li key={i}>{w}</li>
           ))}

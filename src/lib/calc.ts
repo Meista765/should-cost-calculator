@@ -65,7 +65,7 @@ export function calcProcessCost(rows: ProcessInput[], db: Db): {
     const worker = lookupWorkerRate(row.workerRole, db);
     const uph = row.uph;
     if (!Number.isFinite(uph) || uph == null || uph <= 0) {
-      errors.push(`Process ${i + 1}: enter a UPH greater than 0.`);
+      errors.push(`공정 ${i + 1}: UPH는 0보다 큰 값이어야 합니다.`);
       continue;
     }
     if (machine === undefined) {
@@ -130,19 +130,19 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
   if (hasInvalidRequiredNumber(input)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: 'Enter finite numeric values before calculating.' },
+      unavailable: { reason: 'missing-input', message: '계산하려면 유한한 숫자 값을 입력하세요.' },
     };
   }
   if (hasNonPositiveRequiredNumber(input)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: 'Width, pitch, thickness, and volume must be greater than 0.' },
+      unavailable: { reason: 'missing-input', message: '폭, 피치, 두께, 체적은 0보다 커야 합니다.' },
     };
   }
   if (hasOutOfRangeRecovery(input)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: 'Scrap recovery must be between 0% and 100%.' },
+      unavailable: { reason: 'missing-input', message: '스크랩 회수율은 0%~100% 범위여야 합니다.' },
     };
   }
 
@@ -179,7 +179,7 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
   if (!Number.isFinite(rawWeightKg) || !Number.isFinite(partWeightKg)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: 'Input values are too large to calculate.' },
+      unavailable: { reason: 'missing-input', message: '입력 값이 너무 커서 계산할 수 없습니다.' },
     };
   }
 
@@ -205,7 +205,7 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
   if (!Number.isFinite(materialCost) || !Number.isFinite(proc.total)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: 'Input values are too large to calculate.' },
+      unavailable: { reason: 'missing-input', message: '입력 값이 너무 커서 계산할 수 없습니다.' },
     };
   }
 

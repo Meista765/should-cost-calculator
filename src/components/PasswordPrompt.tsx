@@ -17,7 +17,7 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
     if (busy) return;
     setError(null);
     if (pw.length === 0) {
-      setError('Enter the password.');
+      setError('비밀번호를 입력하세요.');
       return;
     }
     setBusy(true);
@@ -43,7 +43,11 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
         브라우저 내부에서 WebCrypto API로 복호화됩니다.
       </p>
       <form onSubmit={submit} className="pw-form">
+        <label htmlFor="unlock-password" className="sr-only">
+          비밀번호
+        </label>
         <input
+          id="unlock-password"
           type="password"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
@@ -52,13 +56,14 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
           disabled={busy}
           autoComplete="off"
           spellCheck={false}
+          aria-describedby="unlock-pw-help"
         />
         <button type="submit" className="primary" disabled={busy || pw.length === 0}>
           {busy ? '복호화 중…' : '잠금 해제'}
         </button>
       </form>
-      {error && <p className="error">⚠ {error}</p>}
-      <p className="footnote muted">
+      {error && <p className="error" role="alert">⚠ {error}</p>}
+      <p id="unlock-pw-help" className="footnote muted">
         데이터 갱신 시각: {encryptedAt}
         <br />
         보안 강화를 위해 비밀번호는 캐시되지 않습니다. 새로고침/탭 전환 시 다시 입력해야 합니다.
