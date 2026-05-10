@@ -28,7 +28,7 @@ jobs:
       # 테스트는 로컬에서만 실행한다 — CI runner에는 Data/*.md(대외비)가 없어 의도적으로 스킵.
       - run: npm run build
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
-      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: ./dist
           # 과거 빌드 ZIP에서 옛 encrypted.json이 다운로드되는 노출면을 줄인다.
