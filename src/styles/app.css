@@ -290,3 +290,12 @@ button.primary:hover { background: #1f4dbe; }
   border-radius: 6px;
   margin-top: 10px;
 }
+
+.pw-form {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.pw-form input {
+  flex: 1;
+}

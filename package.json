@@ -5,7 +5,7 @@
   "type": "module",
   "description": "판금 프레스 3D 설계 변경에 따른 가격 AS-IS, TO-BE 계산기",
   "scripts": {
-    "build:data": "node scripts/build-data.mjs",
+    "encrypt:data": "node scripts/encrypt-data.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

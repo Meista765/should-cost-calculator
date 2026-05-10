@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { computeBreakdown } from '../lib/calc';
-import { clearDb, loadDb, loadMeta, saveDb, type StoredMeta } from '../lib/storage';
+import { decryptDb, type EncryptedBundle } from '../lib/crypto';
 import { initialState, reducer } from '../state/formReducer';
 import { AsIsForm } from './AsIsForm';
 import { ResultsPanel } from './ResultsPanel';
 import { CaseOneSimulator } from './CaseOneSimulator';
 import { CaseTwoComparison } from './CaseTwoComparison';
-import { DataImport } from './DataImport';
+import { PasswordPrompt } from './PasswordPrompt';
+import encryptedJson from '../data/encrypted.json';
 import type { CostBreakdown, Db } from '../types/domain';
+
+const bundle = encryptedJson as EncryptedBundle;
+const PW_CACHE_KEY = 'should-cost-pw-v1';
 
 const EMPTY_BREAKDOWN: CostBreakdown = {
   rawWeightKg: 0,
@@ -21,12 +25,20 @@ const EMPTY_BREAKDOWN: CostBreakdown = {
 
 export function App() {
   const [db, setDb] = useState<Db | null>(null);
-  const [meta, setMeta] = useState<StoredMeta | null>(null);
+  const [autoUnlocking, setAutoUnlocking] = useState(true);
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // 같은 탭 세션 동안 자동 잠금 해제
   useEffect(() => {
-    setDb(loadDb());
-    setMeta(loadMeta());
+    const cached = sessionStorage.getItem(PW_CACHE_KEY);
+    if (!cached) {
+      setAutoUnlocking(false);
+      return;
+    }
+    decryptDb(bundle, cached)
+      .then(setDb)
+      .catch(() => sessionStorage.removeItem(PW_CACHE_KEY))
+      .finally(() => setAutoUnlocking(false));
   }, []);
 
   const asIsBreakdown = useMemo(
@@ -38,6 +50,19 @@ export function App() {
     [state.toBe, db],
   );
 
+  if (autoUnlocking) {
+    return (
+      <div className="app">
+        <header>
+          <h1>판금 프레스 Should-Cost 계산기</h1>
+        </header>
+        <main>
+          <p className="muted">잠금 해제 중…</p>
+        </main>
+      </div>
+    );
+  }
+
   if (!db) {
     return (
       <div className="app">
@@ -45,11 +70,11 @@ export function App() {
           <h1>판금 프레스 Should-Cost 계산기</h1>
         </header>
         <main>
-          <DataImport
-            onLoaded={(loaded) => {
-              const m = saveDb(loaded);
+          <PasswordPrompt
+            bundle={bundle}
+            onUnlocked={(loaded, password) => {
+              sessionStorage.setItem(PW_CACHE_KEY, password);
               setDb(loaded);
-              setMeta(m);
             }}
           />
         </main>
@@ -57,24 +82,21 @@ export function App() {
     );
   }
 
-  const importedDate = meta ? new Date(meta.importedAt).toLocaleString('ko-KR') : '—';
+  const dataDate = new Date(bundle.encryptedAt).toLocaleString('ko-KR');
 
   return (
     <div className="app">
       <header>
         <h1>판금 프레스 Should-Cost 계산기</h1>
-        <span className="muted small">데이터 가져온 시각: {importedDate}</span>
+        <span className="muted small">데이터 갱신 시각: {dataDate}</span>
         <div className="spacer" />
         <button
           onClick={() => {
-            if (confirm('저장된 데이터를 지우고 다시 가져오시겠습니까?')) {
-              clearDb();
-              setDb(null);
-              setMeta(null);
-            }
+            sessionStorage.removeItem(PW_CACHE_KEY);
+            setDb(null);
           }}
         >
-          데이터 다시 가져오기
+          잠금
         </button>
       </header>
 

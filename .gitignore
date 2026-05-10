@@ -5,10 +5,11 @@ dist
 # TS 빌드 캐시
 *.tsbuildinfo
 
-# 대외비 데이터 — 번들에 포함 금지, 저장소에도 commit 금지.
-# 운영자는 npm run build:data 로 로컬 검증만 가능.
+# 대외비 평문 데이터는 절대 commit 금지. 암호화된 번들(encrypted.json)만 예외 허용.
 src/data/*.json
-Data/
+!src/data/encrypted.json
+# 루트 한정 — Windows case-insensitive 매칭으로 src/data까지 잡지 않도록
+/Data/
 
 # OS
 .DS_Store
