@@ -26,3 +26,7 @@ Thumbs.db
 src-tauri/target/
 src-tauri/gen/schemas/
 *.pdb
+
+# Supabase CLI local cache (per-machine state, contains org/project metadata)
+supabase/.temp/
+supabase/.branches/
