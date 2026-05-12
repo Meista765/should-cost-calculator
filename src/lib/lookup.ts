@@ -1,19 +1,13 @@
 // DB 조회 및 강종-두께 보간.
-import type { CoilPriceRow, Db, PressKind } from '../types/domain';
-import { GRAVITY_FALLBACK } from './normalize';
-
-export type GravityResult = { gravity: number; warning?: string };
-
-export function lookupGravity(grade: string, db: Db): GravityResult | undefined {
-  const direct = db.gravity.find((g) => g.grade === grade);
-  if (direct) return { gravity: direct.gravity };
-  const fallback = GRAVITY_FALLBACK[grade];
-  if (fallback) {
-    const ref = db.gravity.find((g) => g.grade === fallback.grade);
-    if (ref) return { gravity: ref.gravity, warning: `비중 추정값 사용: ${fallback.reason}` };
-  }
-  return undefined;
-}
+import type {
+  CoilPriceRow,
+  CutMaterialKey,
+  Db,
+  MaterialMetaRow,
+  PressKind,
+  Thk,
+} from '../types/domain';
+import { THK_LIST } from '../types/domain';
 
 export function lookupCoilPrice(
   grade: string,
@@ -130,4 +124,99 @@ export function listAllGrades(db: Db): { grade: string; displayName: string }[] 
   return [...seen.entries()]
     .map(([grade, displayName]) => ({ grade, displayName }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko'));
+}
+
+// 통합 폼 재질 드롭다운 — materialMeta 카탈로그 전체.
+export type MaterialOption = {
+  grade: string;
+  displayName: string;
+  density: number;
+};
+
+export function listAllMaterials(db: Db): MaterialOption[] {
+  return db.materialMeta
+    .map((m) => ({ grade: m.grade, displayName: m.displayName, density: m.density }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko'));
+}
+
+// ----- v10 판금 헬퍼 -----
+
+// VLOOKUP TRUE 모드 동일: 두께를 THK_LIST의 "가까운 큰 값"으로 매핑.
+export function lookupThk(thk: number): Thk {
+  for (const t of THK_LIST) {
+    if (thk <= t + 1e-9) return t;
+  }
+  return THK_LIST[THK_LIST.length - 1];
+}
+
+export function lookupThkIndex(thk: number): number {
+  const t = lookupThk(thk);
+  return THK_LIST.indexOf(t);
+}
+
+export function findMaterialMeta(grade: string, db: Db): MaterialMetaRow | undefined {
+  return db.materialMeta.find((m) => m.grade === grade);
+}
+
+// MATERIAL_DB에 등록된 강종이면 그 cutKey를 사용. 미등록 시 prefix 규칙 적용.
+export function cutMaterialKey(grade: string, db: Db): CutMaterialKey | undefined {
+  const meta = findMaterialMeta(grade, db);
+  if (meta) return meta.cutKey;
+  if (grade.startsWith('STS')) {
+    const rest = grade.slice(3);
+    if (rest === '304L') return 'SUS304';
+    if (rest === '316L') return 'SUS316';
+    if (rest === '444') return 'SUS430';
+    const fallback = ('SUS' + rest) as CutMaterialKey;
+    return fallback;
+  }
+  return undefined;
+}
+
+export function lookupPierceTime(thk: number, db: Db): number {
+  const t = lookupThk(thk);
+  return db.pierceTime[String(t)] ?? 0;
+}
+
+export function lookupBendTime(thk: number, db: Db): number {
+  const t = lookupThk(thk);
+  return db.bendTime[String(t)] ?? 0;
+}
+
+export function lookupCutSpeed(cutKey: CutMaterialKey, thk: number, db: Db): number {
+  const row = db.cutSpeed.find((r) => r.key === cutKey);
+  if (!row) return 0;
+  const idx = lookupThkIndex(thk);
+  return row.values[idx] ?? 0;
+}
+
+export function lookupWeldSpeed(
+  kind: Exclude<import('../types/domain').WeldKind, 'Spot'>,
+  thk: number,
+  db: Db,
+): number {
+  const row = db.weldSpeed.find((r) => r.key === kind);
+  if (!row) return 0;
+  const idx = lookupThkIndex(thk);
+  return row.values[idx] ?? 0;
+}
+
+export function lookupProcessRate(
+  key: import('../types/domain').ProcessRateKey,
+  db: Db,
+): number {
+  const row = db.processRates.find((r) => r.key === key);
+  return row?.rate ?? 0;
+}
+
+export function lookupFreight(tonnage: string, db: Db) {
+  return db.freightMatrix.find((r) => r.tonnage === tonnage);
+}
+
+export function lookupOwnVehicle(tonnage: string, db: Db) {
+  return db.ownVehicleMatrix.find((r) => r.tonnage === tonnage);
+}
+
+export function lookupCleanRow(helpers: number, db: Db) {
+  return db.cleanMatrix.find((r) => r.helpers === helpers);
 }

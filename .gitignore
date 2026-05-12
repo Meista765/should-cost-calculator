@@ -19,3 +19,10 @@ Thumbs.db
 .vscode
 .idea
 *.log
+
+.env*
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
+*.pdb

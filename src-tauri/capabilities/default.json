@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "메인 윈도우 capability — 커스텀 IPC 두 개만 허용",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:default",
+    {
+      "identifier": "core:webview:allow-create-webview-window",
+      "allow": []
+    }
+  ]
+}

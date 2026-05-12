@@ -1,19 +1,24 @@
-import type { FormSlice, PressKind, ProcessInput } from '../types/domain';
+import type { PressKind, ProcessInput, ProcessMethod, UnifiedFormSlice } from '../types/domain';
+import type { WrapperRole } from '../lib/crypto';
 
 export type FormTarget = 'asIs' | 'toBe';
 
 export type AppState = {
-  asIs: FormSlice;
-  toBe: FormSlice;
+  role: WrapperRole | null;
+  asIs: UnifiedFormSlice;
+  toBe: UnifiedFormSlice;
   toBeEnabled: boolean;
 };
 
 export type Action =
-  | { type: 'PATCH'; target: FormTarget; patch: Partial<FormSlice> }
+  | { type: 'PATCH'; target: FormTarget; patch: Partial<UnifiedFormSlice> }
+  | { type: 'SET_PROCESS_METHOD'; target: FormTarget; method: ProcessMethod }
   | { type: 'SET_PROCESS_COUNT'; target: FormTarget; count: number }
   | { type: 'PATCH_PROCESS'; target: FormTarget; index: number; patch: Partial<ProcessInput> }
   | { type: 'TOGGLE_TOBE' }
-  | { type: 'COPY_ASIS_TO_TOBE' };
+  | { type: 'COPY_ASIS_TO_TOBE' }
+  | { type: 'SET_ROLE'; role: WrapperRole | null }
+  | { type: 'RESET_FOR_LOCK' };
 
 export function defaultProcess(kind: PressKind = '프로'): ProcessInput {
   return {
@@ -24,23 +29,31 @@ export function defaultProcess(kind: PressKind = '프로'): ProcessInput {
   };
 }
 
-export function emptyForm(): FormSlice {
+export function emptyForm(): UnifiedFormSlice {
   return {
-    scrapRecovery: 0.9,
-    processCount: 1,
-    processes: [defaultProcess()],
+    processMethod: 'press',
+    scrapRecovery: 1,
+    batchQty: 100,
+    transRound: true,
+    transNight: 0,
+    weldPosFactor: 1,
+    cleanUse: false,
+    paintUse: false,
+    pressProcessCount: 1,
+    pressProcesses: [defaultProcess()],
   };
 }
 
 export const initialState: AppState = {
+  role: null,
   asIs: emptyForm(),
   toBe: emptyForm(),
   toBeEnabled: false,
 };
 
-function adjustProcessLength(slice: FormSlice, count: number): FormSlice {
+function adjustProcessLength(slice: UnifiedFormSlice, count: number): UnifiedFormSlice {
   const safeCount = Number.isFinite(count) ? Math.min(20, Math.max(1, Math.trunc(count))) : 1;
-  const cur = slice.processes;
+  const cur = slice.pressProcesses;
   let next: ProcessInput[];
   if (safeCount > cur.length) {
     next = [...cur];
@@ -50,30 +63,33 @@ function adjustProcessLength(slice: FormSlice, count: number): FormSlice {
   } else {
     next = cur;
   }
-  return { ...slice, processCount: safeCount, processes: next };
+  return { ...slice, pressProcessCount: safeCount, pressProcesses: next };
 }
 
 function patchProcess(
-  slice: FormSlice,
+  slice: UnifiedFormSlice,
   index: number,
   patch: Partial<ProcessInput>,
-): FormSlice {
-  const next = slice.processes.map((p, i) => {
+): UnifiedFormSlice {
+  const next = slice.pressProcesses.map((p, i) => {
     if (i !== index) return p;
     const merged = { ...p, ...patch };
-    // kind 변경 시 uph default 자동 조정
     if (patch.kind && patch.kind !== p.kind) {
       merged.uph = patch.kind === '프로' ? 720 : 180;
     }
     return merged;
   });
-  return { ...slice, processes: next };
+  return { ...slice, pressProcesses: next };
 }
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'PATCH': {
       const slice = { ...state[action.target], ...action.patch };
+      return { ...state, [action.target]: slice };
+    }
+    case 'SET_PROCESS_METHOD': {
+      const slice = { ...state[action.target], processMethod: action.method };
       return { ...state, [action.target]: slice };
     }
     case 'SET_PROCESS_COUNT': {
@@ -88,6 +104,10 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, toBeEnabled: !state.toBeEnabled };
     case 'COPY_ASIS_TO_TOBE':
       return { ...state, toBe: structuredClone(state.asIs), toBeEnabled: true };
+    case 'SET_ROLE':
+      return { ...state, role: action.role };
+    case 'RESET_FOR_LOCK':
+      return { ...initialState };
     default:
       return state;
   }

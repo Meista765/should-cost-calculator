@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { decryptDb, type EncryptedBundle } from '../lib/crypto';
+import { decryptBundle, type EncryptedBundle, type WrapperRole } from '../lib/crypto';
 import type { Db } from '../types/domain';
 
 type Props = {
   bundle: EncryptedBundle;
-  onUnlocked: (db: Db) => void;
+  onUnlocked: (db: Db, role: WrapperRole, dek: CryptoKey) => void;
 };
 
 export function PasswordPrompt({ bundle, onUnlocked }: Props) {
@@ -22,10 +22,9 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
     }
     setBusy(true);
     try {
-      const db = await decryptDb(bundle, pw);
-      // 비밀번호는 어디에도 보관하지 않는다. 사용 직후 메모리에서 폐기.
+      const { db, role, dek } = await decryptBundle(bundle, pw);
       setPw('');
-      onUnlocked(db);
+      onUnlocked(db, role, dek);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -39,8 +38,8 @@ export function PasswordPrompt({ bundle, onUnlocked }: Props) {
     <section className="form-card import-card">
       <h2>잠금 해제</h2>
       <p className="muted">
-        사내에서 공유받은 비밀번호를 입력하세요. 입력값은 외부 서버로 전송되지 않으며,
-        브라우저 내부에서 WebCrypto API로 복호화됩니다.
+        사내에서 공유받은 비밀번호를 입력하세요. 관리자 비밀번호로 로그인하면 단가 DB를
+        수정하거나 비밀번호를 변경할 수 있습니다.
       </p>
       <form onSubmit={submit} className="pw-form">
         <label htmlFor="unlock-password" className="sr-only">

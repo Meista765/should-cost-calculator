@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { computeBreakdown } from '../lib/calc';
-import { type EncryptedBundle } from '../lib/crypto';
+import { isV2, type EncryptedBundle, type WrapperRole } from '../lib/crypto';
+import { loadBundle } from '../lib/tauriFs';
 import { initialState, reducer } from '../state/formReducer';
-import { AsIsForm } from './AsIsForm';
+import { UnifiedForm } from './UnifiedForm';
 import { ResultsPanel } from './ResultsPanel';
-import { CaseOneSimulator } from './CaseOneSimulator';
 import { CaseTwoComparison } from './CaseTwoComparison';
 import { PasswordPrompt } from './PasswordPrompt';
-import encryptedJson from '../data/encrypted.json';
+import { PasswordChangeDialog } from './PasswordChangeDialog';
 import type { CostBreakdown, Db } from '../types/domain';
 
-const bundle = encryptedJson as EncryptedBundle;
+const AdminPanel = lazy(() => import('./AdminPanel'));
 
 const EMPTY_BREAKDOWN: CostBreakdown = {
   rawWeightKg: 0,
@@ -23,7 +23,6 @@ const EMPTY_BREAKDOWN: CostBreakdown = {
   errors: [],
 };
 
-// 이전 버전에서 sessionStorage에 비밀번호를 캐시하던 흔적 제거 (업그레이드 안전장치).
 const LEGACY_PW_CACHE_KEY = 'should-cost-pw-v1';
 try {
   sessionStorage.removeItem(LEGACY_PW_CACHE_KEY);
@@ -32,14 +31,42 @@ try {
 }
 
 export function App() {
+  const [bundle, setBundle] = useState<EncryptedBundle | null>(null);
+  const [etag, setEtag] = useState<string | null>(null);
+  const [bundleError, setBundleError] = useState<string | null>(null);
   const [db, setDb] = useState<Db | null>(null);
+  const [role, setRole] = useState<WrapperRole | null>(null);
+  const dekRef = useRef<CryptoKey | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showPwChange, setShowPwChange] = useState(false);
 
-  // 탭이 백그라운드로 가거나 닫힐 때 복호화된 DB를 메모리에서 폐기.
-  // 비밀번호는 어디에도 캐시하지 않으므로 다시 입력해야 한다.
+  useEffect(() => {
+    let cancelled = false;
+    loadBundle()
+      .then((loaded) => {
+        if (cancelled) return;
+        setBundle(loaded.bundle);
+        setEtag(loaded.etag);
+      })
+      .catch((err) => {
+        if (!cancelled) setBundleError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 탭이 백그라운드로 가거나 닫힐 때 복호화된 DB/DEK를 메모리에서 폐기.
   useEffect(() => {
     if (!db) return;
-    const wipe = () => setDb(null);
+    const wipe = () => {
+      setDb(null);
+      setRole(null);
+      dekRef.current = null;
+      setShowAdmin(false);
+      setShowPwChange(false);
+    };
     window.addEventListener('pagehide', wipe);
     window.addEventListener('beforeunload', wipe);
     return () => {
@@ -57,16 +84,39 @@ export function App() {
     [state.toBe, db],
   );
 
-  if (!db) {
+  if (!bundle) {
     return (
       <div className="app">
         <header>
-          <h1>판금 프레스 Should-Cost 계산기</h1>
+          <h1>판금 Should-Cost 계산기</h1>
+        </header>
+        <main>
+          <section className="form-card">
+            <h2>데이터 불러오는 중…</h2>
+            {bundleError && (
+              <p className="error" role="alert">⚠ {bundleError}</p>
+            )}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (!db || !role) {
+    return (
+      <div className="app">
+        <header>
+          <h1>판금 Should-Cost 계산기</h1>
         </header>
         <main>
           <PasswordPrompt
             bundle={bundle}
-            onUnlocked={(loaded) => setDb(loaded)}
+            onUnlocked={(loaded, r, dek) => {
+              setDb(loaded);
+              setRole(r);
+              dekRef.current = dek;
+              dispatch({ type: 'SET_ROLE', role: r });
+            }}
           />
         </main>
       </div>
@@ -74,22 +124,75 @@ export function App() {
   }
 
   const dataDate = new Date(bundle.encryptedAt).toLocaleString('ko-KR');
+  const isAdmin = role === 'admin';
+  const v2bundle = isV2(bundle) ? bundle : null;
+
+  function lock() {
+    setDb(null);
+    setRole(null);
+    dekRef.current = null;
+    setShowAdmin(false);
+    setShowPwChange(false);
+    dispatch({ type: 'RESET_FOR_LOCK' });
+  }
 
   return (
     <div className="app">
       <header>
-        <h1>판금 프레스 Should-Cost 계산기</h1>
+        <h1>판금 Should-Cost 계산기</h1>
         <span className="muted small">데이터 갱신 시각: {dataDate}</span>
         <div className="spacer" />
-        <button onClick={() => setDb(null)}>잠금</button>
+        <span className="role-badge">{isAdmin ? '관리자' : '사용자'}</span>
+        {isAdmin && v2bundle && (
+          <>
+            <button onClick={() => setShowAdmin(true)}>관리자 패널</button>
+            <button onClick={() => setShowPwChange(true)}>비밀번호 변경</button>
+          </>
+        )}
+        <button onClick={lock}>잠금</button>
       </header>
 
       <main>
+        {showAdmin && isAdmin && v2bundle && dekRef.current && (
+          <Suspense fallback={<p className="muted">관리자 패널 로딩 중…</p>}>
+            <AdminPanel
+              db={db}
+              bundle={v2bundle}
+              etag={etag}
+              dek={dekRef.current}
+              onClose={() => setShowAdmin(false)}
+              onDbUpdated={(nextDb, nextBundle, nextEtag) => {
+                setDb(nextDb);
+                setBundle(nextBundle);
+                setEtag(nextEtag);
+              }}
+            />
+          </Suspense>
+        )}
+
+        {showPwChange && v2bundle && dekRef.current && (
+          <PasswordChangeDialog
+            bundle={v2bundle}
+            etag={etag}
+            dek={dekRef.current}
+            role={role}
+            onClose={() => setShowPwChange(false)}
+            onChanged={(nextBundle, nextEtag) => {
+              setBundle(nextBundle);
+              setEtag(nextEtag);
+              setShowPwChange(false);
+            }}
+          />
+        )}
+
         <div className="two-col">
-          <AsIsForm
+          <UnifiedForm
             title="AS-IS 사양"
             value={state.asIs}
             onPatch={(patch) => dispatch({ type: 'PATCH', target: 'asIs', patch })}
+            onSetMethod={(method) =>
+              dispatch({ type: 'SET_PROCESS_METHOD', target: 'asIs', method })
+            }
             onSetProcessCount={(count) =>
               dispatch({ type: 'SET_PROCESS_COUNT', target: 'asIs', count })
             }
@@ -101,8 +204,6 @@ export function App() {
           <ResultsPanel title="AS-IS 결과" breakdown={asIsBreakdown} />
         </div>
 
-        <CaseOneSimulator asIs={state.asIs} asIsBreakdown={asIsBreakdown} db={db} />
-
         <CaseTwoComparison
           enabled={state.toBeEnabled}
           onToggle={() => dispatch({ type: 'TOGGLE_TOBE' })}
@@ -113,10 +214,13 @@ export function App() {
 
         {state.toBeEnabled && (
           <div className="two-col">
-            <AsIsForm
+            <UnifiedForm
               title="TO-BE 사양"
               value={state.toBe}
               onPatch={(patch) => dispatch({ type: 'PATCH', target: 'toBe', patch })}
+              onSetMethod={(method) =>
+                dispatch({ type: 'SET_PROCESS_METHOD', target: 'toBe', method })
+              }
               onSetProcessCount={(count) =>
                 dispatch({ type: 'SET_PROCESS_COUNT', target: 'toBe', count })
               }
@@ -131,7 +235,9 @@ export function App() {
       </main>
 
       <footer>
-        <p className="muted small">모든 단가는 KRW/EA 기준. 데이터는 이 브라우저 외부로 전송되지 않습니다.</p>
+        <p className="muted small">
+          모든 단가는 KRW/EA 기준. 데이터는 이 PC 외부로 전송되지 않습니다.
+        </p>
       </footer>
     </div>
   );

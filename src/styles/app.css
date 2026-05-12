@@ -649,3 +649,202 @@ button.primary:disabled { background: #6f8ad7; border-color: #6f8ad7; }
   header h1 { font-size: 16px; }
   .row-inline { gap: 6px; }
 }
+
+/* ==================== 관리자 패널 ==================== */
+
+.admin-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(29, 34, 48, 0.04);
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.admin-tab {
+  padding: 4px 10px;
+  font-size: 12px;
+  min-height: 28px;
+  border-radius: 4px;
+}
+
+.admin-tab.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.admin-tab.active:hover { background: #1f4dbe; }
+
+.admin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-tab-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-json-toggle {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 28px;
+  color: var(--muted);
+}
+
+.admin-json {
+  width: 100%;
+  font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+  line-height: 1.5;
+  color: var(--text);
+  background: #fafbfd;
+}
+
+/* ── Inline table ── */
+
+.admin-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.admin-kv-wrap { max-width: 480px; }
+
+.admin-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 13px;
+}
+
+.admin-grid-table th,
+.admin-grid-table td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 4px 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.admin-grid-table th:last-child,
+.admin-grid-table td:last-child { border-right: none; }
+
+.admin-grid-table tbody tr:last-child td { border-bottom: none; }
+
+.admin-grid-table thead th {
+  background: var(--thead-bg);
+  font-size: 11px;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.admin-grid-table input,
+.admin-grid-table select {
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+  width: 100%;
+  min-width: 56px;
+}
+
+.admin-add-row {
+  display: block;
+  margin: 8px 0 2px;
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 28px;
+}
+
+.admin-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.admin-row-btn {
+  padding: 0 6px;
+  font-size: 13px;
+  min-height: 26px;
+  min-width: 26px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.admin-row-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.admin-row-btn.admin-row-del {
+  color: var(--up);
+}
+
+.admin-row-btn.admin-row-del:hover {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+
+/* ── Key-value table ── */
+
+.admin-kv-table { min-width: 320px; }
+
+.admin-kv-key {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+.admin-section-divider {
+  background: var(--thead-bg);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 8px !important;
+  text-align: left;
+  border-top: 2px solid var(--border-strong) !important;
+}
+
+/* ── Matrix table ── */
+
+.admin-matrix input {
+  width: 68px;
+  min-width: 68px;
+}
+
+.admin-matrix-key {
+  font-weight: 600;
+  font-size: 12px;
+  min-width: 80px;
+  position: sticky;
+  left: 0;
+  background: var(--thead-bg);
+  z-index: 1;
+}
+
+.admin-grid-table thead .admin-matrix-key { z-index: 2; }

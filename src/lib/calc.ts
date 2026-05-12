@@ -1,46 +1,26 @@
-// 순수 계산 함수. README의 공식을 그대로 따른다.
+// 통합 should-cost 계산 엔진.
+// 재질·치수·세척·용접·도장·운반·관리비/이윤은 공용으로 계산하고,
+// 가공(공법) 영역만 processMethod 에 따라 press / sheet 로 분기한다.
 import type {
   CostBreakdown,
   Db,
-  FormSlice,
   ProcessInput,
+  UnifiedFormSlice,
 } from '../types/domain';
+import { lookupPressRate, lookupWorkerRate } from './lookup';
 import {
-  interpolateCoilPrice,
-  lookupGravity,
-  lookupPressRate,
-  lookupWorkerRate,
-} from './lookup';
-
-export function calcRawWeight(
-  width: number,
-  pitch: number,
-  thickness: number,
-  gravity: number,
-): number {
-  return (width * pitch * thickness * gravity) / 1e6;
-}
-
-export function calcPartWeight(volumeMm3: number, gravity: number): number {
-  return (volumeMm3 * gravity) / 1e6;
-}
-
-export function calcScrapWeight(
-  rawKg: number,
-  partKg: number,
-  recovery: number,
-): number {
-  return Math.max(0, (rawKg - partKg) * recovery);
-}
-
-export function calcMaterialCost(
-  rawKg: number,
-  coilPrice: number,
-  scrapKg: number,
-  scrapPrice: number,
-): number {
-  return rawKg * coilPrice - scrapKg * scrapPrice;
-}
+  calcBend,
+  calcClean,
+  calcLaser,
+  calcMaterial,
+  calcNct,
+  calcPaint,
+  calcTransport,
+  calcWeld,
+  resolveMaterial,
+  setupMinFromDb,
+} from './calcSheet';
+import { applyMarginOverhead } from './applyMargin';
 
 export function calcOneProcessCost(
   machineRate: number,
@@ -51,7 +31,7 @@ export function calcOneProcessCost(
   return (machineRate + workerRate) / uph;
 }
 
-export function calcProcessCost(rows: ProcessInput[], db: Db): {
+export function calcPressProcessCost(rows: ProcessInput[], db: Db): {
   total: number;
   warnings: string[];
   errors: string[];
@@ -81,25 +61,7 @@ export function calcProcessCost(rows: ProcessInput[], db: Db): {
   return { total, warnings, errors };
 }
 
-function hasInvalidRequiredNumber(input: FormSlice): boolean {
-  return (
-    !Number.isFinite(input.width) ||
-    !Number.isFinite(input.pitch) ||
-    !Number.isFinite(input.thickness) ||
-    !Number.isFinite(input.partVolume) ||
-    !Number.isFinite(input.scrapRecovery)
-  );
-}
-
-function hasNonPositiveRequiredNumber(input: FormSlice): boolean {
-  return input.width! <= 0 || input.pitch! <= 0 || input.thickness! <= 0 || input.partVolume! <= 0;
-}
-
-function hasOutOfRangeRecovery(input: FormSlice): boolean {
-  return input.scrapRecovery! < 0 || input.scrapRecovery! > 1;
-}
-
-export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
+export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown {
   const warnings: string[] = [];
   const errors: string[] = [];
   const empty: CostBreakdown = {
@@ -113,110 +75,124 @@ export function computeBreakdown(input: FormSlice, db: Db): CostBreakdown {
     errors,
   };
 
-  if (
-    input.width == null ||
-    input.pitch == null ||
-    input.thickness == null ||
-    input.partVolume == null ||
-    input.scrapRecovery == null ||
-    !input.grade
-  ) {
+  // 1) 재질·두께 필수
+  if (!input.material || input.thkMm == null || input.thkMm <= 0) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: '재료비 계산을 위해 폭/피치/두께/체적/강종을 입력하세요.' },
+      unavailable: { reason: 'missing-input', message: '재질과 두께를 입력하세요.' },
+    };
+  }
+  const matMeta = resolveMaterial(input.material, db);
+  if (!matMeta) {
+    return {
+      ...empty,
+      unavailable: { reason: 'no-grade', message: `${input.material} 재질 정보가 없습니다.` },
     };
   }
 
-  if (hasInvalidRequiredNumber(input)) {
+  // 2) scrapRecovery 범위
+  if (input.scrapRecovery != null && (input.scrapRecovery < 0 || input.scrapRecovery > 1)) {
     return {
       ...empty,
-      unavailable: { reason: 'missing-input', message: '계산하려면 유한한 숫자 값을 입력하세요.' },
-    };
-  }
-  if (hasNonPositiveRequiredNumber(input)) {
-    return {
-      ...empty,
-      unavailable: { reason: 'missing-input', message: '폭, 피치, 두께, 체적은 0보다 커야 합니다.' },
-    };
-  }
-  if (hasOutOfRangeRecovery(input)) {
-    return {
-      ...empty,
-      unavailable: { reason: 'missing-input', message: '스크랩 회수율은 0%~100% 범위여야 합니다.' },
+      unavailable: { reason: 'missing-input', message: '스크랩 회수율은 0~100% 범위여야 합니다.' },
     };
   }
 
-  const gravityInfo = lookupGravity(input.grade, db);
-  if (!gravityInfo) {
-    return {
-      ...empty,
-      unavailable: { reason: 'no-grade', message: `${input.grade} 강종의 비중 정보가 없습니다.` },
-    };
-  }
-  if (gravityInfo.warning) warnings.push(gravityInfo.warning);
-
-  const priceInfo = interpolateCoilPrice(input.grade, input.thickness, db);
-  if (priceInfo.method === 'unavailable') {
-    const reason = priceInfo.reason;
-    const msg =
-      reason === 'no-grade'
-        ? `${input.grade} 가격 정보가 없습니다.`
-        : `${input.grade} ${input.thickness}t는 등록된 두께 범위를 벗어나 가격 산정 불가합니다.`;
-    return {
-      ...empty,
-      unavailable: { reason, message: msg },
-    };
-  }
-  if (priceInfo.warning) warnings.push(priceInfo.warning);
-
-  const rawWeightKg = calcRawWeight(
-    input.width,
-    input.pitch,
-    input.thickness,
-    gravityInfo.gravity,
-  );
-  const partWeightKg = calcPartWeight(input.partVolume, gravityInfo.gravity);
-  if (!Number.isFinite(rawWeightKg) || !Number.isFinite(partWeightKg)) {
+  // 3) 재료 계산
+  const mat = calcMaterial(input, db);
+  if (!Number.isFinite(mat.orderKg) || !Number.isFinite(mat.netKg)) {
     return {
       ...empty,
       unavailable: { reason: 'missing-input', message: '입력 값이 너무 커서 계산할 수 없습니다.' },
     };
   }
-
-  if (rawWeightKg < partWeightKg) {
+  if (mat.priceWarning) warnings.push(mat.priceWarning);
+  if ((input.matPrice == null || input.matPrice <= 0) && mat.matPrice <= 0) {
+    warnings.push('재료 단가가 없습니다. 단가 입력 또는 코일 DB 등록이 필요합니다.');
+  }
+  if (mat.orderKg > 0 && mat.orderKg < mat.netKg) {
     errors.push(
-      `원소재 중량(${rawWeightKg.toFixed(4)} kg)이 제품 중량(${partWeightKg.toFixed(
-        4,
-      )} kg)보다 작습니다. 폭·피치·두께 또는 체적 입력을 확인하세요. (스크랩 중량은 0으로 처리됩니다)`,
+      `원소재 중량(${mat.orderKg.toFixed(4)} kg)이 제품 중량(${mat.netKg.toFixed(4)} kg)보다 작습니다. 가로·세로·두께 또는 체적을 확인하세요.`,
     );
   }
 
-  const scrapWeightKg = calcScrapWeight(rawWeightKg, partWeightKg, input.scrapRecovery!);
-  const materialCost = calcMaterialCost(
-    rawWeightKg,
-    priceInfo.coilPrice,
-    scrapWeightKg,
-    priceInfo.scrapPrice,
-  );
+  const setupMin = setupMinFromDb(db);
 
-  const proc = calcProcessCost(input.processes, db);
-  warnings.push(...proc.warnings);
-  errors.push(...proc.errors);
-  if (!Number.isFinite(materialCost) || !Number.isFinite(proc.total)) {
+  // 4) 공법별 가공비
+  let pressTotal = 0;
+  let laserCost = 0;
+  let bendCost = 0;
+  let nctEa = 0;
+  if (input.processMethod === 'press') {
+    const proc = calcPressProcessCost(input.pressProcesses, db);
+    warnings.push(...proc.warnings);
+    errors.push(...proc.errors);
+    pressTotal = proc.total;
+  } else {
+    const laser = calcLaser(input, db);
+    const bend = calcBend(input, db, setupMin);
+    const nct = calcNct(input, db, setupMin);
+    laserCost = laser.laserCost;
+    bendCost = bend.bendCost;
+    nctEa = nct.perEa;
+  }
+
+  // 5) 공용 라인아이템
+  const clean = calcClean(input, db, mat);
+  const weld = calcWeld(input, db);
+  const paint = calcPaint(input, db);
+  const trans = calcTransport(input, db);
+  const postEa = input.postCostEa ?? 0;
+
+  const processCost =
+    pressTotal + laserCost + bendCost + nctEa + clean.perEa + weld.perEa + paint.perEa;
+  const totalCost = mat.netMatCost + processCost;
+  const direct = totalCost + trans.perEa + postEa;
+
+  if (!Number.isFinite(direct)) {
     return {
       ...empty,
       unavailable: { reason: 'missing-input', message: '입력 값이 너무 커서 계산할 수 없습니다.' },
     };
   }
 
+  // 6) 일반관리비 · 이윤 → should-cost + 견적 비교
+  const margin = applyMarginOverhead({
+    direct,
+    assumptions: db.assumptions,
+    overrides: {
+      overheadRate: input.overheadRateOverride,
+      marginRate: input.marginRateOverride,
+    },
+    quotePerEa: input.quotePerEa,
+  });
+
   return {
-    rawWeightKg,
-    partWeightKg,
-    scrapWeightKg,
-    materialCost,
-    processCost: proc.total,
-    totalCost: materialCost + proc.total,
+    rawWeightKg: mat.orderKg,
+    partWeightKg: mat.netKg,
+    scrapWeightKg: mat.scrapKg,
+    materialCost: mat.netMatCost,
+    processCost,
+    totalCost,
     warnings,
     errors,
+    laserCost: input.processMethod === 'sheet' ? laserCost : undefined,
+    bendCost: input.processMethod === 'sheet' ? bendCost : undefined,
+    nctCost: input.processMethod === 'sheet' ? nctEa : undefined,
+    cleanCost: clean.perEa,
+    weldCost: weld.perEa,
+    paintCost: paint.perEa,
+    transportCost: trans.perEa,
+    postCost: postEa,
+    directCost: direct,
+    overheadCost: margin.overheadCost,
+    profitCost: margin.profitCost,
+    shouldCost: margin.shouldCost,
+    appliedOverheadRate: margin.appliedOverheadRate,
+    appliedMarginRate: margin.appliedMarginRate,
+    quotePerEa: input.quotePerEa,
+    verdict: margin.verdict,
+    diff: margin.diff,
+    diffPct: margin.diffPct,
   };
 }
