@@ -1,7 +1,12 @@
 // 최초 1회: src/data/encrypted.json 을 Supabase bundles 테이블에 id=1 row 로 삽입.
 // secret key (또는 legacy service_role key) 가 필요하므로 admin 본인 PC 에서만 실행.
 //
-// 사용법 (새 키 모델):
+// ⚠ SECURITY:
+//   SUPABASE_SECRET_KEY 는 RLS 를 우회하므로 .env.local 에 영속 저장하지 말 것.
+//   이 스크립트 실행 시점에만 인라인 환경변수로 주입하고, 사용 직후 셸 히스토리에서 제거.
+//   CI/원격 자동화 절대 금지 — 운영 환경에서는 외부 시크릿 매니저 사용.
+//
+// 사용법 (새 키 모델, 인라인 주입):
 //   SUPABASE_URL=https://<ref>.supabase.co \
 //   SUPABASE_SECRET_KEY=sb_secret_... \
 //   node scripts/seed-supabase.mjs [--label "초기 시드"]

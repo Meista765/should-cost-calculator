@@ -54,6 +54,9 @@ export async function fetchRemoteBundle(signal?: AbortSignal): Promise<RemoteBun
 }
 
 // 관리자 저장. 409 → BundleConflictError. 미설정 시 명시적 throw (호출자가 안내 메시지 전환).
+// 권한 검증은 서버측 X-Admin-Key (timing-safe) 가 단일 출처. 클라이언트 가드는 두지 않는다 —
+// user role 사용자도 본인 비번 회전 시 이 함수를 호출해야 하기 때문 (PasswordChangeDialog).
+// 데이터 변조 방지는 crypto.reencryptDb 의 role 가드가 담당.
 export async function pushRemoteBundle(
   bundle: EncryptedBundleV2,
   prevEtag: string,
@@ -89,18 +92,30 @@ export async function computeEtag(bundle: EncryptedBundleV2): Promise<string> {
   return sha256Hex(bundle.ciphertext);
 }
 
-// 관리자 키 보관 — localStorage 1회 입력. 누출 시 Worker 측 ADMIN_API_KEY 회전.
+// 관리자 키 보관 — sessionStorage (탭 단위). 탭 종료 시 자동 폐기.
+// XSS/익스텐션 노출 시간 단축이 목적. 누출 의심 시 Edge Function 측 ADMIN_API_KEY 즉시 회전.
 const ADMIN_KEY_STORAGE = 'should-cost-admin-api-key';
 
+// 1회 호출: 과거 버전이 localStorage 에 남긴 영속 키를 제거.
+// sessionStorage 로 자동 이전하지 않음 — XSS 표면 즉시 축소가 우선.
+let legacyCleared = false;
+function clearLegacyLocalStorage(): void {
+  if (legacyCleared) return;
+  legacyCleared = true;
+  try { localStorage.removeItem(ADMIN_KEY_STORAGE); } catch { /* localStorage 차단 — 무시 */ }
+}
+
 export function getStoredAdminKey(): string | null {
-  try { return localStorage.getItem(ADMIN_KEY_STORAGE); } catch { return null; }
+  clearLegacyLocalStorage();
+  try { return sessionStorage.getItem(ADMIN_KEY_STORAGE); } catch { return null; }
 }
 
 export function setStoredAdminKey(key: string | null): void {
+  clearLegacyLocalStorage();
   try {
-    if (key) localStorage.setItem(ADMIN_KEY_STORAGE, key);
-    else localStorage.removeItem(ADMIN_KEY_STORAGE);
+    if (key) sessionStorage.setItem(ADMIN_KEY_STORAGE, key);
+    else sessionStorage.removeItem(ADMIN_KEY_STORAGE);
   } catch {
-    // localStorage 차단 환경 — 무시 (매번 재입력 받게 됨)
+    // sessionStorage 차단 환경 — 무시 (매번 재입력 받게 됨)
   }
 }

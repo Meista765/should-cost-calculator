@@ -128,15 +128,23 @@ export function listAllGrades(db: Db): { grade: string; displayName: string }[] 
 
 // 통합 폼 재질 드롭다운 — materialMeta 카탈로그 전체.
 export type MaterialOption = {
-  grade: string;
-  displayName: string;
+  grade: string;            // 매칭 키 (option value)
+  gradeRaw: string;         // 표시용 (공백 보존)
+  group?: import('../types/domain').MaterialGroup;
   density: number;
 };
 
+const GROUP_ORDER: Record<string, number> = { '탄소강': 0, 'STS': 1, '비철': 2 };
+
 export function listAllMaterials(db: Db): MaterialOption[] {
-  return db.materialMeta
-    .map((m) => ({ grade: m.grade, displayName: m.displayName, density: m.density }))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko'));
+  return [...db.materialMeta]
+    .sort((a, b) => {
+      const ga = GROUP_ORDER[a.group ?? ''] ?? 99;
+      const gb = GROUP_ORDER[b.group ?? ''] ?? 99;
+      if (ga !== gb) return ga - gb;
+      return a.grade.localeCompare(b.grade, 'en');
+    })
+    .map((m) => ({ grade: m.grade, gradeRaw: m.gradeRaw, group: m.group, density: m.density }));
 }
 
 // ----- v10 판금 헬퍼 -----

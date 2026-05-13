@@ -32,15 +32,19 @@ export function defaultProcess(kind: PressKind = '프로'): ProcessInput {
 export function emptyForm(): UnifiedFormSlice {
   return {
     processMethod: 'press',
-    scrapRecovery: 1,
+    scrapRecovery: 0.9,
     batchQty: 100,
     transRound: true,
-    transNight: 0,
     weldPosFactor: 1,
     cleanUse: false,
     paintUse: false,
+    priceOverride: false,
     pressProcessCount: 1,
     pressProcesses: [defaultProcess()],
+    paintThkUm: 200,
+    overheadRateOverride: 0.15,
+    marginRateOverride: 0.15,
+    postCostRows: [],
   };
 }
 

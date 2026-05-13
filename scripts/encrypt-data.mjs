@@ -1,13 +1,15 @@
 // Data/*.md (기존 4개 + 판금 v10 12개)를 단일 db 객체로 합쳐
 // AES-GCM-256 + 이중 비밀번호 envelope으로 src/data/encrypted.json에 저장한다.
 //
-// 사용법 (셸 무관):
-//   1) 대화형 (권장 — 비번 마스킹 + 명령 히스토리에 안 남음):
-//        npm run encrypt:data
-//   2) npm 인자:
-//        npm run encrypt:data -- "<관리자 비번>" "<사용자 비번>"
-//   3) 환경변수 (CI 용):
-//        BUILD_ADMIN_PASSWORD / BUILD_USER_PASSWORD
+// 사용법:
+//   npm run encrypt:data
+//   → 대화형 마스킹 입력만 허용 (관리자 PC TTY 에서 직접 실행).
+//
+// ⚠ SECURITY:
+//   과거 버전이 지원하던 argv/env 패스워드 입력은 제거됨.
+//   - argv: 셸 히스토리/프로세스 목록에 노출
+//   - env (BUILD_*_PASSWORD): CI 로그 노출
+//   CI/원격 자동화 빌드 절대 금지 — 비번이 평문으로 새는 경로가 없는지 매번 직접 확인.
 //
 // 비밀번호는 16자 이상 + 소문자·대문자·숫자·특수문자 모두 포함이어야 하며 둘이 같으면 거부한다.
 
@@ -43,21 +45,20 @@ function promptHidden(label) {
   });
 }
 
-let adminPw = process.argv[2] || process.env.BUILD_ADMIN_PASSWORD;
-let userPw = process.argv[3] || process.env.BUILD_USER_PASSWORD;
-
-if (!adminPw || !userPw) {
-  if (!process.stdin.isTTY) {
-    console.error('비밀번호 미제공. 다음 중 하나로 실행하세요:');
-    console.error('  npm run encrypt:data                          (대화형)');
-    console.error('  npm run encrypt:data -- "<admin>" "<user>"     (인자)');
-    console.error('  BUILD_ADMIN_PASSWORD=.. BUILD_USER_PASSWORD=.. npm run encrypt:data');
-    process.exit(1);
-  }
-  console.log('비밀번호를 입력하세요. (16자 이상, 소문자·대문자·숫자·특수문자 포함)');
-  if (!adminPw) adminPw = await promptHidden('관리자 비밀번호');
-  if (!userPw) userPw = await promptHidden('사용자 비밀번호');
+// 비밀번호는 대화형 입력만 허용 — argv/env 는 셸 히스토리/CI 로그 노출 위험으로 제거.
+if (!process.stdin.isTTY) {
+  console.error('대화형 TTY 가 필요합니다. CI/자동화 빌드에서 이 스크립트는 실행하지 마세요.');
+  console.error('관리자 PC 터미널에서 직접 `npm run encrypt:data` 를 실행하세요.');
+  process.exit(1);
 }
+if (process.argv[2] || process.env.BUILD_ADMIN_PASSWORD || process.env.BUILD_USER_PASSWORD) {
+  console.error('⚠ argv/env 패스워드 입력은 지원하지 않습니다 (노출 위험으로 제거됨).');
+  console.error('  비밀번호 없이 다시 실행하면 대화형 마스킹 프롬프트가 뜹니다.');
+  process.exit(1);
+}
+console.log('비밀번호를 입력하세요. (16자 이상, 소문자·대문자·숫자·특수문자 포함)');
+const adminPw = await promptHidden('관리자 비밀번호');
+const userPw = await promptHidden('사용자 비밀번호');
 
 if (adminPw === userPw) {
   console.error('관리자 비번과 사용자 비번이 동일합니다. 분리해서 설정하세요.');
@@ -76,8 +77,8 @@ function assertStrongPassword(pw, label) {
     process.exit(1);
   }
 }
-assertStrongPassword(adminPw, 'BUILD_ADMIN_PASSWORD');
-assertStrongPassword(userPw, 'BUILD_USER_PASSWORD');
+assertStrongPassword(adminPw, '관리자 비밀번호');
+assertStrongPassword(userPw, '사용자 비밀번호');
 
 // === 공통 파서 ===
 function parseTable(md) {
@@ -136,6 +137,7 @@ function trimOrUndef(v) {
 const materialMeta = parseTable(materialsMd)
   .map((r) => ({
     grade: canonicalGrade(r['강종']),
+    gradeRaw: r['강종'].trim(),
     displayName: (trimOrUndef(r['강종명']) ?? r['강종'].trim()),
     cutKey: trimOrUndef(r['절단키']),
     group: trimOrUndef(r['재질군']),
@@ -197,25 +199,15 @@ for (const r of parseTable(SHEET('bend_time'))) {
 }
 
 const nctRows = parseTable(SHEET('nct_feat'));
-const nctFeat = {
-  Embossing: 0,
-  Burring: 0,
-  Louver: 0,
-  Countersink: 0,
-  KnockOut: 0,
-  tap: { M3: 0, M4: 0, M5: 0, M6: 0, M8: 0 },
-};
+const nctFeat = { shapes: [], tap: [] };
 for (const r of nctRows) {
   const k = r['형상'].trim();
   const v = num(r['시간(sec/개)'], `nct ${k}`);
-  if (k === 'Embossing') nctFeat.Embossing = v;
-  else if (k === 'Burring') nctFeat.Burring = v;
-  else if (k === 'Louver') nctFeat.Louver = v;
-  else if (k === 'Countersink') nctFeat.Countersink = v;
-  else if (k === 'Knock-out' || k === 'KnockOut') nctFeat.KnockOut = v;
-  else if (k.startsWith('Tap_')) {
-    const size = k.slice(4);
-    nctFeat.tap[size] = v;
+  if (k.startsWith('Tap_')) {
+    nctFeat.tap.push({ size: k.slice(4), sec: v });
+  } else {
+    const shape = k === 'Knock-out' ? 'KnockOut' : k;
+    nctFeat.shapes.push({ shape, sec: v });
   }
 }
 
@@ -273,7 +265,6 @@ const assumptions = {
   overheadRate: num(aMap['간접비율(0~1)'], 'overheadRate'),
   marginRate: num(aMap['이윤율(0~1)'], 'marginRate'),
   setupMin: num(aMap['셋업시간(분/배치)'], 'setupMin'),
-  minPartCost: num(aMap['최소가공비(원/부품)'], 'minPartCost'),
   scrapRateDefault: num(aMap['기본스크랩율(0~1)'], 'scrapRateDefault'),
   avgSpeedKmh: num(aMap['평균속도(km/h)'], 'avgSpeedKmh'),
   loadHr: num(aMap['상하차시간(h)'], 'loadHr'),
@@ -289,7 +280,10 @@ const db = {
 // === 이중 envelope 암호화 ===
 const enc = new TextEncoder();
 const plaintext = enc.encode(JSON.stringify(db));
-const ITERATIONS = 600_000;
+// OWASP 2025 권고치. 기존 600,000 → 1,200,000 으로 강화.
+// 변경 후에는 npm run encrypt:data 를 재실행해 encrypted.json 을 새로 생성해야 함.
+// 사용자 비번은 그대로 (rewrap 이라 비번 변경 없음).
+const ITERATIONS = 1_200_000;
 const toB64 = (b) => Buffer.from(b).toString('base64');
 
 // 1) 랜덤 DEK 생성 → payload AES-GCM 암호화

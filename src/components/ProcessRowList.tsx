@@ -27,7 +27,7 @@ export function ProcessRowList({ count, rows, onSetCount, onPatchRow, db }: Prop
           ))}
         </select>
         <span id="process-count-help" className="field-hint">
-          공정별 UPH와 직종을 입력하면 가공비가 계산됩니다.
+          공정별 UPH(시간 당 생산수량)와 직종을 입력하면 가공비가 계산됩니다.
         </span>
       </div>
       <div className="table-scroll">

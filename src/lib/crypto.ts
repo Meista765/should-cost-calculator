@@ -94,6 +94,32 @@ export type DecryptResult = {
   dek: CryptoKey;    // 메모리에서만 사용. 직렬화 금지.
 };
 
+// 기존 nctFeat 형태 ({Embossing:..., tap:{M3:...}}) 를 신 배열 형식 ({shapes:[], tap:[]}) 으로 변환.
+// 이미 신 형식이면 무변경. encrypted.json 재암호화 전까지의 호환 레이어.
+function migrateNctFeat(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return { shapes: [], tap: [] };
+  const r = raw as Record<string, unknown>;
+  if (Array.isArray(r.shapes) && Array.isArray(r.tap)) return raw;
+  const shapes: Array<{ shape: string; sec: number }> = [];
+  for (const k of ['Embossing', 'Burring', 'Louver', 'Countersink', 'KnockOut']) {
+    if (typeof r[k] === 'number') shapes.push({ shape: k, sec: r[k] as number });
+  }
+  const tap: Array<{ size: string; sec: number }> = [];
+  if (r.tap && typeof r.tap === 'object' && !Array.isArray(r.tap)) {
+    for (const [size, sec] of Object.entries(r.tap as Record<string, unknown>)) {
+      if (typeof sec === 'number') tap.push({ size, sec });
+    }
+  }
+  return { shapes, tap };
+}
+
+function normalizeDb(raw: unknown): Db {
+  if (!raw || typeof raw !== 'object') return raw as Db;
+  const r = raw as Record<string, unknown>;
+  if (r.nctFeat) r.nctFeat = migrateNctFeat(r.nctFeat);
+  return raw as Db;
+}
+
 export async function decryptBundle(
   bundle: EncryptedBundle,
   password: string,
@@ -129,7 +155,7 @@ export async function decryptBundle(
         fromB64(bundle.ciphertext),
       );
       const text = new TextDecoder().decode(plaintext);
-      const db = JSON.parse(text) as Db;
+      const db = normalizeDb(JSON.parse(text));
       return { db, role: w.role, dek };
     } catch {
       continue;
@@ -160,7 +186,7 @@ async function decryptLegacyV1(
     throw new Error('비밀번호가 올바르지 않습니다.');
   }
   const text = new TextDecoder().decode(plaintext);
-  const db = JSON.parse(text) as Db;
+  const db = normalizeDb(JSON.parse(text));
   // 레거시는 단일 비번 — admin으로 취급, dek는 임시(이후 v2로 마이그레이션 필요).
   const dummyDek = await crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
@@ -207,11 +233,17 @@ export async function rotatePassword(
 }
 
 // 관리자가 DB를 편집 후 호출. DEK는 그대로, payload만 재암호화.
+// 방어적 가드: user role 보유자는 DEK를 갖더라도 재암호화 차단.
+//   (서버측 X-Admin-Key 검증과 별개로 코드 레벨에서도 권한 분리)
 export async function reencryptDb(
   db: Db,
   dek: CryptoKey,
   baseBundle: EncryptedBundleV2,
+  role: WrapperRole,
 ): Promise<EncryptedBundleV2> {
+  if (role !== 'admin') {
+    throw new Error('admin role required to re-encrypt bundle');
+  }
   const dataIv = crypto.getRandomValues(new Uint8Array(12));
   const dataIvBuf = u8ToBuffer(dataIv);
   const plaintext = u8ToBuffer(new TextEncoder().encode(JSON.stringify(db)));

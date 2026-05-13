@@ -4,6 +4,7 @@ import type {
   CutMaterialKey,
   Db,
   MaterialGroup,
+  NctMethod,
   UnifiedFormSlice,
   WeldKind,
 } from '../types/domain';
@@ -44,19 +45,16 @@ function resolvePrice(
   input: UnifiedFormSlice,
   db: Db,
 ): { matPrice: number; scrapPrice: number; warning?: string } {
-  let matPrice = input.matPrice;
-  let scrapPrice = input.scrapPrice;
-  let warning: string | undefined;
-  const needLookup = matPrice == null || matPrice <= 0;
-  if (needLookup && input.material && input.thkMm != null && input.thkMm > 0) {
+  if (input.priceOverride) {
+    return { matPrice: input.matPrice ?? 0, scrapPrice: input.scrapPrice ?? 0 };
+  }
+  if (input.material && input.thkMm != null && input.thkMm > 0) {
     const r = interpolateCoilPrice(input.material, input.thkMm, db);
     if (r.method !== 'unavailable') {
-      if (matPrice == null || matPrice <= 0) matPrice = r.coilPrice;
-      if (scrapPrice == null || scrapPrice <= 0) scrapPrice = r.scrapPrice;
-      if (r.warning) warning = r.warning;
+      return { matPrice: r.coilPrice, scrapPrice: r.scrapPrice, warning: r.warning };
     }
   }
-  return { matPrice: matPrice ?? 0, scrapPrice: scrapPrice ?? 0, warning };
+  return { matPrice: 0, scrapPrice: 0 };
 }
 
 // ---------- 재료 ----------
@@ -69,6 +67,7 @@ export type MaterialResult = {
   netMatCost: number;
   matPrice: number;
   scrapPrice: number;
+  volumeMissing: boolean;
   priceWarning?: string;
 };
 
@@ -84,12 +83,8 @@ export function calcMaterial(inp: UnifiedFormSlice, db: Db): MaterialResult {
 
   const orderKg = (X * Y * thk * density) / 1_000_000;
 
-  let netKg: number;
-  if (vol > 0) {
-    netKg = (vol * density) / 1_000_000;
-  } else {
-    netKg = orderKg * (1 - db.assumptions.scrapRateDefault);
-  }
+  const volumeMissing = vol <= 0;
+  const netKg = volumeMissing ? orderKg : (vol * density) / 1_000_000;
 
   const scrapGross = Math.max(orderKg - netKg, 0);
   const scrapKg = scrapGross * recovery;
@@ -106,6 +101,7 @@ export function calcMaterial(inp: UnifiedFormSlice, db: Db): MaterialResult {
     netMatCost,
     matPrice,
     scrapPrice,
+    volumeMissing,
     priceWarning: warning,
   };
 }
@@ -162,21 +158,73 @@ export type TransportResult = {
   trips: number;
   total: number;
   perEa: number;
+  loadSource: 'hierarchy' | 'direct' | 'none';
+  effectiveLoad: number;
+  eaPerBox?: number;
+  boxPerPallet?: number;
+  palletPerCar?: number;
+  boxesPerTrip?: number;
+  kgPerTrip?: number;
+  m3PerTrip?: number;
+  maxKg?: number;
+  maxM3?: number;
+  overWeight: boolean;
+  overVolume: boolean;
 };
 
 export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
-  const zero: TransportResult = { perTrip: 0, trips: 0, total: 0, perEa: 0 };
   const method = inp.transMethod ?? '';
   const tonnage = inp.transTon ?? '';
   const distance = inp.transKm ?? 0;
   const roundTrip = inp.transRound !== false;
-  const loadPerTrip = inp.transLoad ?? 0;
-  const nightSurcharge = inp.transNight ?? 0;
   const batch = inp.batchQty ?? 1;
 
-  if (!method || distance <= 0 || loadPerTrip <= 0) return zero;
+  const eaPerBox = inp.transEaPerBox ?? 0;
+  const boxPerPallet = inp.transBoxPerPallet ?? 0;
+  const palletPerCar = inp.transPalletPerCar ?? 0;
+  const hierarchyComplete = eaPerBox > 0 && boxPerPallet > 0 && palletPerCar > 0;
+  const hierarchyLoad = hierarchyComplete ? eaPerBox * boxPerPallet * palletPerCar : 0;
+  const directLoad = inp.transLoad ?? 0;
+  const effectiveLoad = hierarchyLoad > 0 ? hierarchyLoad : directLoad;
+  const loadSource: 'hierarchy' | 'direct' | 'none' =
+    hierarchyLoad > 0 ? 'hierarchy' : directLoad > 0 ? 'direct' : 'none';
+
+  const boxesPerTrip = boxPerPallet > 0 && palletPerCar > 0 ? boxPerPallet * palletPerCar : 0;
+  const kgPerTrip =
+    boxesPerTrip > 0 && (inp.transBoxWeightKg ?? 0) > 0
+      ? boxesPerTrip * (inp.transBoxWeightKg as number)
+      : undefined;
+  const m3PerTrip =
+    boxesPerTrip > 0 && (inp.transBoxVolumeM3 ?? 0) > 0
+      ? boxesPerTrip * (inp.transBoxVolumeM3 as number)
+      : undefined;
+
+  const traceBase = {
+    loadSource,
+    effectiveLoad,
+    eaPerBox: eaPerBox > 0 ? eaPerBox : undefined,
+    boxPerPallet: boxPerPallet > 0 ? boxPerPallet : undefined,
+    palletPerCar: palletPerCar > 0 ? palletPerCar : undefined,
+    boxesPerTrip: boxesPerTrip > 0 ? boxesPerTrip : undefined,
+    kgPerTrip,
+    m3PerTrip,
+  } as const;
+
+  const zero: TransportResult = {
+    perTrip: 0,
+    trips: 0,
+    total: 0,
+    perEa: 0,
+    ...traceBase,
+    overWeight: false,
+    overVolume: false,
+  };
+
+  if (!method || distance <= 0 || effectiveLoad <= 0) return zero;
 
   let perTrip = 0;
+  let maxKg: number | undefined;
+  let maxM3: number | undefined;
   if (method === '용달') {
     const row = lookupFreight(tonnage, db);
     if (!row) return zero;
@@ -191,7 +239,9 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
         50 * row.r50_100 +
         200 * row.r100_300 +
         (d - 300) * row.r300plus;
-    perTrip = (base + row.loadFee) * (roundTrip ? 1.6 : 1.0) * (1 + nightSurcharge);
+    perTrip = (base + row.loadFee) * (roundTrip ? 1.6 : 1.0);
+    maxKg = row.maxKg;
+    maxM3 = row.maxM3;
   } else if (method === '자체') {
     const row = lookupOwnVehicle(tonnage, db);
     if (!row) return zero;
@@ -199,15 +249,26 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
     perTrip =
       row.fixPerHour * (rtKm / db.assumptions.avgSpeedKmh + db.assumptions.loadHr) +
       row.fuelPerKm * rtKm;
-    perTrip *= 1 + nightSurcharge;
   } else {
     return zero;
   }
 
-  const trips = loadPerTrip > 0 ? Math.ceil(batch / loadPerTrip) : 0;
+  const trips = Math.ceil(batch / effectiveLoad);
   const total = perTrip * trips;
   const perEa = batch > 0 ? total / batch : 0;
-  return { perTrip, trips, total, perEa };
+  const overWeight = maxKg != null && kgPerTrip != null && kgPerTrip > maxKg;
+  const overVolume = maxM3 != null && m3PerTrip != null && m3PerTrip > maxM3;
+  return {
+    perTrip,
+    trips,
+    total,
+    perEa,
+    ...traceBase,
+    maxKg,
+    maxM3,
+    overWeight,
+    overVolume,
+  };
 }
 
 // ---------- NCT ----------
@@ -218,25 +279,51 @@ export type NctResult = {
   perEa: number;
 };
 
+function nctShapeSec(feat: Db['nctFeat'], name: string): number {
+  return feat.shapes.find((s) => s.shape === name)?.sec ?? 0;
+}
+
+function nctTapSec(feat: Db['nctFeat'], size: string): number {
+  return feat.tap.find((t) => t.size === size)?.sec ?? 0;
+}
+
+// method → DB shapes 항목 이름 (Tap 제외 — Tap은 별도 db.nctFeat.tap 사용)
+export const NCT_SHAPE_NAME: Record<Exclude<NctMethod, 'Tap'>, string> = {
+  Embossing: 'Embossing',
+  Burring: 'Burring',
+  Louver: 'Louver',
+  KnockOut: 'KnockOut',
+};
+
 export function calcNct(inp: UnifiedFormSlice, db: Db, setupMin: number): NctResult {
-  const em = inp.nctEm ?? 0;
-  const bur = inp.nctBur ?? 0;
-  const tap = inp.nctTap ?? 0;
-  const lou = inp.nctLou ?? 0;
-  const tapSize = inp.nctTapSize ?? 'M5';
+  const rows = inp.nctRows ?? [];
   const batch = inp.batchQty ?? 1;
 
-  if (em + bur + tap + lou === 0) {
+  let shapeFeatSec = 0;
+  let shapeTotalCount = 0;
+  for (const r of rows) {
+    if (r.method === 'Tap') continue;
+    const n = r.count ?? 0;
+    if (n <= 0) continue;
+    shapeFeatSec += n * nctShapeSec(db.nctFeat, NCT_SHAPE_NAME[r.method]);
+    shapeTotalCount += n;
+  }
+
+  let tapTotalCount = 0;
+  let tapTotalSec = 0;
+  for (const r of rows) {
+    if (r.method !== 'Tap' || !r.tapSize) continue;
+    const n = r.count ?? 0;
+    if (n <= 0) continue;
+    tapTotalCount += n;
+    tapTotalSec += n * nctTapSec(db.nctFeat, r.tapSize);
+  }
+
+  if (shapeTotalCount + tapTotalCount === 0) {
     return { featSec: 0, nctMin: 0, nctCostBatch: 0, perEa: 0 };
   }
 
-  const tapSec = db.nctFeat.tap[tapSize] ?? db.nctFeat.tap['M5'];
-  const featSec =
-    em * db.nctFeat.Embossing +
-    bur * db.nctFeat.Burring +
-    tap * tapSec +
-    lou * db.nctFeat.Louver;
-
+  const featSec = shapeFeatSec + tapTotalSec;
   const nctMin = (batch > 0 ? setupMin / batch : 0) + featSec / 60;
   const rate = lookupProcessRate('NCT_펀치프레스', db);
   const nctCostBatch = ((setupMin + (featSec * batch) / 60) * rate) / 60;
@@ -255,6 +342,7 @@ export function calcClean(
   const use = inp.cleanUse === true;
   const n = inp.cleanN ?? 0;
   if (!use || n <= 0) return { method: '', rate: 0, perEa: 0 };
+  if (mat.volumeMissing) return { method: '', rate: 0, perEa: 0 };
 
   const meta = resolveMaterial(inp.material ?? '', db);
   if (!meta?.group) return { method: '', rate: 0, perEa: 0 };

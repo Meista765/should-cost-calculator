@@ -1,4 +1,4 @@
-import type { CostBreakdown } from '../types/domain';
+import type { CostBreakdown, TransportTrace } from '../types/domain';
 import { formatKRW, formatKg, formatPercent } from '../lib/format';
 
 type Props = { title: string; breakdown: CostBreakdown };
@@ -45,8 +45,14 @@ export function ResultsPanel({ title, breakdown }: Props) {
       </div>
       <div className="results-grid">
         <Row label="원소재 중량" value={formatKg(breakdown.rawWeightKg)} />
-        <Row label="제품 중량" value={formatKg(breakdown.partWeightKg)} />
-        <Row label="스크랩 중량" value={formatKg(breakdown.scrapWeightKg)} />
+        <Row
+          label="제품 중량"
+          value={breakdown.materialDetail?.volumeMissing ? '—' : formatKg(breakdown.partWeightKg)}
+        />
+        <Row
+          label="스크랩 중량"
+          value={breakdown.materialDetail?.volumeMissing ? '—' : formatKg(breakdown.scrapWeightKg)}
+        />
         <Row label="재료비" value={formatKRW(breakdown.materialCost)} />
         {hasSheetLines ? (
           <>
@@ -69,7 +75,7 @@ export function ResultsPanel({ title, breakdown }: Props) {
               <Row label="도장" value={formatKRW(breakdown.paintCost)} />
             )}
             {breakdown.transportCost != null && breakdown.transportCost > 0 && (
-              <Row label="운반비" value={formatKRW(breakdown.transportCost)} />
+              <TransportRow perEa={breakdown.transportCost} trace={breakdown.transportDetail} />
             )}
             {breakdown.postCost != null && breakdown.postCost > 0 && (
               <Row label="후공정 추가" value={formatKRW(breakdown.postCost)} />
@@ -94,12 +100,6 @@ export function ResultsPanel({ title, breakdown }: Props) {
               />
             )}
             <Row label="Should-Cost" value={formatKRW(breakdown.shouldCost!)} strong />
-            {breakdown.verdict && (
-              <Row
-                label={`견적 비교 (${formatKRW(breakdown.quotePerEa ?? 0)})`}
-                value={`${breakdown.verdict} · ${formatPercent(breakdown.diffPct ?? 0)}`}
-              />
-            )}
           </>
         ) : (
           <Row label="총원가" value={formatKRW(breakdown.totalCost)} strong />
@@ -131,6 +131,66 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <div className={`r-label${strong ? ' strong' : ''}`}>{label}</div>
       <div className={`r-value${strong ? ' strong' : ''}`}>{value}</div>
       {strong && <div className="r-unit">KRW/EA</div>}
+    </div>
+  );
+}
+
+const fmtInt = (n: number) => Math.round(n).toLocaleString('ko-KR');
+const fmtNum = (n: number, digits: number) =>
+  n.toLocaleString('ko-KR', { maximumFractionDigits: digits });
+
+function TransportRow({ perEa, trace }: { perEa: number; trace?: TransportTrace }) {
+  if (!trace || trace.loadSource === 'none') {
+    return <Row label="운반비" value={formatKRW(perEa)} />;
+  }
+  const hierarchy = trace.loadSource === 'hierarchy';
+  return (
+    <details className="transport-trace">
+      <summary className="result-row transport-summary">
+        <div className="r-label">운반비</div>
+        <div className="r-value">{formatKRW(perEa)}</div>
+      </summary>
+      <div className="transport-trace-body">
+        {hierarchy && (
+          <>
+            <TraceLine label="박스당 EA" value={`${fmtInt(trace.eaPerBox ?? 0)} EA`} />
+            <TraceLine label="팔레트당 박스" value={`${fmtInt(trace.boxPerPallet ?? 0)} box`} />
+            <TraceLine label="차량당 팔레트" value={`${fmtInt(trace.palletPerCar ?? 0)} pallet`} />
+          </>
+        )}
+        <TraceLine label="회당 적재" value={`${fmtInt(trace.effectiveLoad)} EA`} />
+        {trace.kgPerTrip != null && (
+          <TraceLine
+            label="회당 적재 무게"
+            value={`${fmtNum(trace.kgPerTrip, 0)} kg${
+              trace.maxKg != null ? ` / 한계 ${fmtNum(trace.maxKg, 0)} kg` : ''
+            }`}
+            bad={trace.overWeight}
+          />
+        )}
+        {trace.m3PerTrip != null && (
+          <TraceLine
+            label="회당 적재 부피"
+            value={`${fmtNum(trace.m3PerTrip, 2)} m³${
+              trace.maxM3 != null ? ` / 한계 ${fmtNum(trace.maxM3, 2)} m³` : ''
+            }`}
+            bad={trace.overVolume}
+          />
+        )}
+        <TraceLine label="회당 운반비" value={formatKRW(trace.perTrip)} />
+        <TraceLine label="필요 회차" value={`${fmtInt(trace.trips)} 회`} />
+        <TraceLine label="총 운반비" value={formatKRW(trace.total)} />
+        <TraceLine label="EA당" value={formatKRW(trace.perEa)} />
+      </div>
+    </details>
+  );
+}
+
+function TraceLine({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
+  return (
+    <div className={`trace-line${bad ? ' trace-bad' : ''}`}>
+      <span className="trace-label">{label}</span>
+      <span className="trace-value">{value}</span>
     </div>
   );
 }

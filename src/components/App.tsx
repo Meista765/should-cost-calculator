@@ -5,6 +5,7 @@ import { loadBundle } from '../lib/tauriFs';
 import { initialState, reducer } from '../state/formReducer';
 import { UnifiedForm } from './UnifiedForm';
 import { ResultsPanel } from './ResultsPanel';
+import { CaseOneSimulator } from './CaseOneSimulator';
 import { CaseTwoComparison } from './CaseTwoComparison';
 import { PasswordPrompt } from './PasswordPrompt';
 import { PasswordChangeDialog } from './PasswordChangeDialog';
@@ -160,6 +161,7 @@ export function App() {
               bundle={v2bundle}
               etag={etag}
               dek={dekRef.current}
+              role={role}
               onClose={() => setShowAdmin(false)}
               onDbUpdated={(nextDb, nextBundle, nextEtag) => {
                 setDb(nextDb);
@@ -200,9 +202,12 @@ export function App() {
               dispatch({ type: 'PATCH_PROCESS', target: 'asIs', index, patch })
             }
             db={db}
+            breakdown={asIsBreakdown}
           />
           <ResultsPanel title="AS-IS 결과" breakdown={asIsBreakdown} />
         </div>
+
+        <CaseOneSimulator asIs={state.asIs} asIsBreakdown={asIsBreakdown} db={db} />
 
         <CaseTwoComparison
           enabled={state.toBeEnabled}
@@ -228,6 +233,7 @@ export function App() {
                 dispatch({ type: 'PATCH_PROCESS', target: 'toBe', index, patch })
               }
               db={db}
+              breakdown={toBeBreakdown}
             />
             <ResultsPanel title="TO-BE 결과" breakdown={toBeBreakdown} />
           </div>

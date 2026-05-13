@@ -11,12 +11,13 @@ import type {
   MaterialGroup,
   MaterialMetaRow,
   NctFeatureTable,
+  NctShapeRow,
+  NctTapRow,
   OwnVehicleRow,
   PaintConstants,
   PressKind,
   PressRateRow,
   ProcessRateRow,
-  TapSize,
   WeldSpeedTable,
   WorkerRateRow,
 } from '../types/domain';
@@ -82,6 +83,7 @@ function parseMaterialsTable(md: string): MaterialMetaRow[] {
   return rows
     .map((r) => {
       const grade = canonicalGrade(r['강종']);
+      const gradeRaw = r['강종'].trim();
       const displayRaw = (r['강종명'] ?? r['강종']).trim();
       const displayName = displayRaw === '' || displayRaw === '-' ? r['강종'].trim() : displayRaw;
       const cutRaw = (r['절단키'] ?? '').trim();
@@ -90,6 +92,7 @@ function parseMaterialsTable(md: string): MaterialMetaRow[] {
       const group = groupRaw === '' || groupRaw === '-' ? undefined : (groupRaw as MaterialGroup);
       return {
         grade,
+        gradeRaw,
         displayName,
         cutKey,
         group,
@@ -182,27 +185,19 @@ export function parseBendTimeMd(md: string): Record<string, number> {
 }
 
 export function parseNctFeatMd(md: string): NctFeatureTable {
-  const feat: NctFeatureTable = {
-    Embossing: 0,
-    Burring: 0,
-    Louver: 0,
-    Countersink: 0,
-    KnockOut: 0,
-    tap: { M3: 0, M4: 0, M5: 0, M6: 0, M8: 0 },
-  };
+  const shapes: NctShapeRow[] = [];
+  const tap: NctTapRow[] = [];
   for (const r of parseTable(md)) {
     const k = r['형상'].trim();
     const v = num(r['시간(sec/개)'], `nct ${k}`);
-    if (k === 'Embossing') feat.Embossing = v;
-    else if (k === 'Burring') feat.Burring = v;
-    else if (k === 'Louver') feat.Louver = v;
-    else if (k === 'Countersink') feat.Countersink = v;
-    else if (k === 'Knock-out' || k === 'KnockOut') feat.KnockOut = v;
-    else if (k.startsWith('Tap_')) {
-      feat.tap[k.slice(4) as TapSize] = v;
+    if (k.startsWith('Tap_')) {
+      tap.push({ size: k.slice(4), sec: v });
+    } else {
+      const shape = k === 'Knock-out' ? 'KnockOut' : k;
+      shapes.push({ shape, sec: v });
     }
   }
-  return feat;
+  return { shapes, tap };
 }
 
 export function parseCleanMatrixMd(md: string): CleanMatrixRow[] {
@@ -278,7 +273,6 @@ export function parseAssumptionsMd(md: string): Assumptions {
     overheadRate: num(kv['간접비율(0~1)'], 'overheadRate'),
     marginRate: num(kv['이윤율(0~1)'], 'marginRate'),
     setupMin: num(kv['셋업시간(분/배치)'], 'setupMin'),
-    minPartCost: num(kv['최소가공비(원/부품)'], 'minPartCost'),
     scrapRateDefault: num(kv['기본스크랩율(0~1)'], 'scrapRateDefault'),
     avgSpeedKmh: num(kv['평균속도(km/h)'], 'avgSpeedKmh'),
     loadHr: num(kv['상하차시간(h)'], 'loadHr'),
@@ -303,10 +297,7 @@ export function buildDb(parts: Partial<Record<DataKind, string>>): Db {
     cutSpeed: [],
     pierceTime: {},
     bendTime: {},
-    nctFeat: {
-      Embossing: 0, Burring: 0, Louver: 0, Countersink: 0, KnockOut: 0,
-      tap: { M3: 0, M4: 0, M5: 0, M6: 0, M8: 0 },
-    },
+    nctFeat: { shapes: [], tap: [] },
     weldSpeed: [],
     cleanMatrix: [],
     freightMatrix: [],
@@ -314,7 +305,7 @@ export function buildDb(parts: Partial<Record<DataKind, string>>): Db {
     processRates: [],
     paint: { thkUm: 0, densityGcm3: 0, efficiency: 0 },
     assumptions: {
-      overheadRate: 0, marginRate: 0, setupMin: 30, minPartCost: 0,
+      overheadRate: 0, marginRate: 0, setupMin: 30,
       scrapRateDefault: 0.15, avgSpeedKmh: 60, loadHr: 1, spotSec: 1.5,
     },
   };

@@ -83,18 +83,18 @@ const MINI_DB = {
   coil: [],
   press: [],
   worker: [],
-  materialMeta: [{ grade: 'STS304', displayName: 'STS304', cutKey: 'SUS304', group: 'STS', density: 7.93 }],
+  materialMeta: [{ grade: 'STS304', gradeRaw: 'STS304', displayName: 'STS304', cutKey: 'SUS304', group: 'STS', density: 7.93 }],
   cutSpeed: [],
   pierceTime: {},
   bendTime: {},
-  nctFeat: { Embossing: 0, Burring: 0, Louver: 0, Countersink: 0, KnockOut: 0, tap: { M3: 0, M4: 0, M5: 0, M6: 0, M8: 0 } },
+  nctFeat: { shapes: [], tap: [] },
   weldSpeed: [],
   cleanMatrix: [],
   freightMatrix: [],
   ownVehicleMatrix: [],
   processRates: [],
   paint: { thkUm: 70, densityGcm3: 1.5, efficiency: 0.65 },
-  assumptions: { overheadRate: 0.18, marginRate: 0.10, setupMin: 30, minPartCost: 3000, scrapRateDefault: 0.15, avgSpeedKmh: 60, loadHr: 1, spotSec: 1.5 },
+  assumptions: { overheadRate: 0.18, marginRate: 0.10, setupMin: 30, scrapRateDefault: 0.15, avgSpeedKmh: 60, loadHr: 1, spotSec: 1.5 },
 } as unknown as Db;
 
 beforeAll(() => {
@@ -145,9 +145,18 @@ describe('DB 재암호화', () => {
     let b = await buildV2Bundle(MINI_DB);
     const r1 = await decryptBundle(b, ADMIN);
     const edited: Db = { ...r1.db, paint: { thkUm: 99, densityGcm3: 2.0, efficiency: 0.8 } };
-    b = await reencryptDb(edited, r1.dek, b);
+    b = await reencryptDb(edited, r1.dek, b, r1.role);
     const r2 = await decryptBundle(b, USER);
     expect(r2.db.paint.thkUm).toBe(99);
     expect(r2.db.paint.efficiency).toBe(0.8);
+  });
+
+  it('user role 로 reencryptDb 호출 시 throw — 권한 분리 가드', async () => {
+    const b = await buildV2Bundle(MINI_DB);
+    const r = await decryptBundle(b, USER);
+    expect(r.role).toBe('user');
+    const edited: Db = { ...r.db, paint: { thkUm: 1, densityGcm3: 1, efficiency: 0.1 } };
+    // user 비번으로 unlock 한 사람은 DEK 를 가지고 있더라도 reencryptDb 호출 차단.
+    await expect(reencryptDb(edited, r.dek, b, r.role)).rejects.toThrow(/admin role required/);
   });
 });

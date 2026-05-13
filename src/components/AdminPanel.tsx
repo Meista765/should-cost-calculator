@@ -3,10 +3,10 @@ import { useState } from 'react';
 import type {
   Db, CoilPriceRow, PressRateRow, WorkerRateRow,
   MaterialMetaRow, FreightRow, OwnVehicleRow, ProcessRateRow,
-  NctFeatureTable, CleanMatrixRow, ThkVectorRow, MaterialGroup, TapSize,
+  NctFeatureTable, NctShapeRow, NctTapRow, CleanMatrixRow, ThkVectorRow, MaterialGroup,
 } from '../types/domain';
 import { THK_LIST } from '../types/domain';
-import { reencryptDb, type EncryptedBundleV2 } from '../lib/crypto';
+import { reencryptDb, type EncryptedBundleV2, type WrapperRole } from '../lib/crypto';
 import { saveBundle } from '../lib/tauriFs';
 import {
   BundleConflictError,
@@ -254,40 +254,33 @@ function MatrixEditor({ data, onChange }: {
 
 // ─── NctFeat ─────────────────────────────────────────────────────────────────
 
-const NCT_TOP: Array<[keyof NctFeatureTable & string, string]> = [
-  ['Embossing', 'Embossing'], ['Burring', 'Burring'],
-  ['Louver', 'Louver'], ['Countersink', 'Countersink'], ['KnockOut', 'KnockOut'],
+const NCT_SHAPE_COLS: ColDef<NctShapeRow>[] = [
+  { key: 'shape', label: '형상', kind: 'str', w: '160px' },
+  { key: 'sec',   label: '시간(sec/개)', kind: 'num', w: '140px' },
 ];
-const TAP_SIZES: TapSize[] = ['M3', 'M4', 'M5', 'M6', 'M8'];
+const NCT_TAP_COLS: ColDef<NctTapRow>[] = [
+  { key: 'size', label: '탭 사이즈', kind: 'str', w: '160px' },
+  { key: 'sec',  label: '시간(sec/개)', kind: 'num', w: '140px' },
+];
 
 function NctFeatEditor({ data, onChange }: { data: NctFeatureTable; onChange: (next: NctFeatureTable) => void }) {
   return (
-    <div className="admin-table-wrap admin-kv-wrap">
-      <table className="admin-grid-table admin-kv-table">
-        <thead><tr><th>형상</th><th>시간(min/개)</th></tr></thead>
-        <tbody>
-          {NCT_TOP.map(([k, label]) => (
-            <tr key={k}>
-              <td className="admin-kv-key">{label}</td>
-              <td>
-                <input type="number" value={data[k] as number}
-                  onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) onChange({ ...data, [k]: v }); }} />
-              </td>
-            </tr>
-          ))}
-          <tr><td colSpan={2} className="admin-section-divider">탭 가공 시간</td></tr>
-          {TAP_SIZES.map(k => (
-            <tr key={k}>
-              <td className="admin-kv-key">{k}</td>
-              <td>
-                <input type="number" value={data.tap[k]}
-                  onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) onChange({ ...data, tap: { ...data.tap, [k]: v } }); }} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="admin-section-divider">NCT 형상</div>
+      <RowEditor<NctShapeRow>
+        data={data.shapes}
+        cols={NCT_SHAPE_COLS}
+        onChange={(rows) => onChange({ ...data, shapes: rows })}
+        makeEmpty={() => ({ shape: '', sec: 0 })}
+      />
+      <div className="admin-section-divider">탭 공정</div>
+      <RowEditor<NctTapRow>
+        data={data.tap}
+        cols={NCT_TAP_COLS}
+        onChange={(rows) => onChange({ ...data, tap: rows })}
+        makeEmpty={() => ({ size: '', sec: 0 })}
+      />
+    </>
   );
 }
 
@@ -374,7 +367,7 @@ const OWN_COLS:     ColDef<OwnVehicleRow>[]       = [{ key:'tonnage', label:'톤
 const PROC_COLS:    ColDef<ProcessRateRow>[]      = [{ key:'key', label:'공정', kind:'sel', opts:[...PROC_KEYS] }, { key:'rate', label:'임율(원/hr)', kind:'num', w:'110px' }];
 
 const PAINT_LABELS: Record<string, string> = { thkUm:'도막두께 기본값(μm)', densityGcm3:'도료 비중(g/cm³)', efficiency:'도장 효율(0~1)' };
-const ASSUMP_LABELS: Record<string, string> = { overheadRate:'일반관리비율', marginRate:'이윤율', setupMin:'셋업 시간(min)', minPartCost:'최소 가공비(원)', scrapRateDefault:'스크랩율 기본값', avgSpeedKmh:'평균 속도(km/h)', loadHr:'상하차 시간(hr)', spotSec:'Spot 용접 시간(sec)' };
+const ASSUMP_LABELS: Record<string, string> = { overheadRate:'일반관리비율', marginRate:'이윤율', setupMin:'셋업 시간(min)', scrapRateDefault:'스크랩율 기본값', avgSpeedKmh:'평균 속도(km/h)', loadHr:'상하차 시간(hr)', spotSec:'Spot 용접 시간(sec)' };
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -383,11 +376,12 @@ type Props = {
   bundle: EncryptedBundleV2;
   etag: string | null;
   dek: CryptoKey;
+  role: WrapperRole;
   onClose: () => void;
   onDbUpdated: (nextDb: Db, nextBundle: EncryptedBundleV2, nextEtag: string | null) => void;
 };
 
-export default function AdminPanel({ db, bundle, etag, dek, onClose, onDbUpdated }: Props) {
+export default function AdminPanel({ db, bundle, etag, dek, role, onClose, onDbUpdated }: Props) {
   const [draft, setDraft] = useState<Db>(() => structuredClone(db));
   const [tab, setTab] = useState<TabKey>('coil');
   const [showJson, setShowJson] = useState(false);
@@ -444,7 +438,7 @@ export default function AdminPanel({ db, bundle, etag, dek, onClose, onDbUpdated
     }
     try {
       setBusy(true);
-      const nextBundle = await reencryptDb(merged, dek, bundle);
+      const nextBundle = await reencryptDb(merged, dek, bundle, role);
 
       if (isRemoteConfigured()) {
         let adminKey = getStoredAdminKey();
@@ -500,7 +494,7 @@ export default function AdminPanel({ db, bundle, etag, dek, onClose, onDbUpdated
           makeEmpty={() => ({ role:'', rate:0 })} />;
       case 'materialMeta':
         return <RowEditor<MaterialMetaRow> data={d as MaterialMetaRow[]} cols={META_COLS} onChange={onTableChange}
-          makeEmpty={() => ({ grade:'', displayName:'', cutKey: undefined, group: undefined, density:0 })} />;
+          makeEmpty={() => ({ grade:'', gradeRaw:'', displayName:'', cutKey: undefined, group: undefined, density:0 })} />;
       case 'cutSpeed':
         return <MatrixEditor data={d as ThkVectorRow<string>[]} onChange={onTableChange} />;
       case 'weldSpeed':

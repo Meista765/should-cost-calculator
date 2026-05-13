@@ -95,6 +95,33 @@ legend {
   color: var(--muted);
 }
 
+legend.legend-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 12px);
+  gap: 12px;
+}
+
+.legend-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.legend-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.legend-check:hover { color: var(--text); }
+
 .grid {
   display: grid;
   gap: 10px;
@@ -147,6 +174,17 @@ input:focus, select:focus {
 }
 
 input::placeholder { color: #9aa3b2; }
+
+input:disabled,
+select:disabled {
+  background: #f1f3f7;
+  color: #98a0ae;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+input:disabled::placeholder { color: #b8bfca; }
+.field:has(input:disabled) .field-label,
+.field:has(input:disabled) .unit { color: #aab1bd; }
 
 .input-invalid {
   border-color: var(--up);
@@ -771,11 +809,44 @@ button.primary:disabled { background: #6f8ad7; border-color: #6f8ad7; }
 }
 
 .admin-add-row {
-  display: block;
-  margin: 8px 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  min-height: 36px;
+}
+
+.admin-add-row:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  border-style: dashed;
+  background: rgba(40, 88, 210, 0.05);
+}
+
+.admin-add-row:active {
+  background: rgba(40, 88, 210, 0.09);
+}
+
+.admin-add-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
   font-size: 12px;
-  padding: 4px 10px;
-  min-height: 28px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .admin-row-actions {
@@ -848,3 +919,433 @@ button.primary:disabled { background: #6f8ad7; border-color: #6f8ad7; }
 }
 
 .admin-grid-table thead .admin-matrix-key { z-index: 2; }
+
+/* ── Transport preview & trace ── */
+
+.transport-hierarchy {
+  margin-top: 8px;
+}
+
+/* 운반 적재 입력 — 세그먼티드 토글 */
+.transport-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.transport-mode-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.transport-mode-sum {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.transport-mode-sum b {
+  color: var(--fg);
+}
+
+/* 세그먼티드 토글 (운반 적재 입력, 공법 선택 공용) */
+.mode-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 3px;
+  gap: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.mode-tab {
+  padding: 6px 14px;
+  min-height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.mode-tab:hover { background: var(--thead-bg); }
+.mode-tab.active,
+.mode-tab[aria-selected='true'] {
+  background: var(--primary);
+  color: #fff;
+}
+.mode-tab.active:hover,
+.mode-tab[aria-selected='true']:hover { background: var(--primary); }
+.mode-tab:focus-visible { outline-offset: 0; }
+
+/* 적재 입력 행 — 자녀 수에 무관하게 3컬럼 유지 (auto-fit 폭 폭주 방지) */
+.transport-load-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .transport-load-row { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .transport-load-row { grid-template-columns: 1fr; }
+}
+
+.transport-preview {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: var(--row-stripe);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transport-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.chain-box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--card);
+  line-height: 1.2;
+}
+
+.chain-box em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chain-box strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chain-box span {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.chain-total {
+  background: var(--row-current);
+  border-color: var(--primary);
+}
+
+.chain-op {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.transport-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.transport-preview-meta .meta-ok {
+  color: var(--ok-text);
+}
+
+.transport-preview-meta .meta-bad {
+  color: var(--up);
+  font-weight: 600;
+}
+
+/* ── Post-cost preview ── */
+
+.post-preview {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: var(--row-stripe);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.post-preview-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.post-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--card);
+  line-height: 1.2;
+}
+
+.post-chip em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  max-width: 140px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.post-chip strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.post-chip span {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.post-chip-total {
+  background: var(--row-current);
+  border-color: var(--primary);
+}
+
+.post-chip-total strong {
+  color: var(--primary);
+}
+
+.post-chip-op {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.post-preview-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.transport-trace > summary.transport-summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.transport-trace > summary.transport-summary::-webkit-details-marker {
+  display: none;
+}
+
+.transport-trace > summary.transport-summary .r-label::before {
+  content: '▸ ';
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.transport-trace[open] > summary.transport-summary .r-label::before {
+  content: '▾ ';
+}
+
+.transport-trace-body {
+  margin: 4px 0 4px 18px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--border-strong);
+  background: var(--row-stripe);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trace-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.trace-label {
+  color: var(--muted);
+}
+
+.trace-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-bad .trace-value {
+  color: var(--up);
+  font-weight: 600;
+}
+
+/* ----- 섹션별 계산식 박스 ----- */
+.section-formula {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: var(--row-stripe);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.55;
+}
+
+.section-formula.muted { opacity: 0.7; }
+
+.section-formula .sf-head {
+  font-weight: 600;
+  margin-bottom: 4px;
+  opacity: 0.85;
+  color: var(--text);
+}
+
+.section-formula .sf-empty {
+  color: var(--muted);
+  padding: 2px 0;
+}
+
+.section-formula .sf-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-formula-row {
+  display: grid;
+  grid-template-columns: minmax(80px, max-content) 1fr;
+  gap: 8px;
+  padding: 1px 0;
+  align-items: baseline;
+}
+
+.section-formula-row .lbl {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.section-formula-row .val {
+  color: var(--text);
+  word-break: keep-all;
+}
+
+.section-formula-row .val b {
+  font-weight: 700;
+}
+
+.section-formula .sf-warn {
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  padding: 0 6px;
+  border-radius: 3px;
+}
+
+.section-formula-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.section-formula-total .sf-total-lbl {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.section-formula-total .sf-total-val b {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.process-row-formula {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 240px;
+}
+
+.sf-mini {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--row-stripe);
+  color: var(--text);
+}
+
+/* ----- Foldable 공정 카드 (세척/용접/분체 도장) ----- */
+.foldable-card {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  margin: 12px 0;
+  background: transparent;
+}
+
+.foldable-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  border-radius: 6px;
+}
+
+.foldable-card-header:hover {
+  background: var(--row-stripe);
+}
+
+.foldable-card-header:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.foldable-card.is-open .foldable-card-header {
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 6px 6px 0 0;
+}
+
+.foldable-card-chevron {
+  color: var(--muted);
+  font-size: 12px;
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+}
+
+.foldable-card-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.foldable-card-body {
+  padding: 12px;
+}

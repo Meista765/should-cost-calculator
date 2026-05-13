@@ -139,18 +139,35 @@ describe('pushRemoteBundle', () => {
 });
 
 describe('admin key 저장', () => {
-  it('set/get/clear round-trip', async () => {
+  function makeStore() {
+    const m = new Map<string, string>();
+    return {
+      _map: m,
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => { m.set(k, v); },
+      removeItem: (k: string) => { m.delete(k); },
+    };
+  }
+
+  it('sessionStorage round-trip + 레거시 localStorage 키 즉시 제거', async () => {
     stubRemote();
-    const store = new Map<string, string>();
-    vi.stubGlobal('localStorage', {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => { store.set(k, v); },
-      removeItem: (k: string) => { store.delete(k); },
-    } as unknown as Storage);
+    const sessionStore = makeStore();
+    const localStore = makeStore();
+    localStore._map.set('should-cost-admin-api-key', 'legacy-leftover'); // 과거 버전 흔적
+    vi.stubGlobal('sessionStorage', sessionStore as unknown as Storage);
+    vi.stubGlobal('localStorage', localStore as unknown as Storage);
+
     const { getStoredAdminKey, setStoredAdminKey } = await import('../remoteBundle');
+
+    // 첫 read 가 레거시 localStorage 키를 제거 + sessionStorage 는 비어있음.
     expect(getStoredAdminKey()).toBeNull();
+    expect(localStore._map.has('should-cost-admin-api-key')).toBe(false);
+
     setStoredAdminKey('my-key');
+    expect(sessionStore._map.get('should-cost-admin-api-key')).toBe('my-key');
+    expect(localStore._map.has('should-cost-admin-api-key')).toBe(false);
     expect(getStoredAdminKey()).toBe('my-key');
+
     setStoredAdminKey(null);
     expect(getStoredAdminKey()).toBeNull();
   });
