@@ -27,7 +27,7 @@ export const THK_LIST = [
 ] as const;
 export type Thk = (typeof THK_LIST)[number];
 
-export type MaterialGroup = '탄소강' | 'STS' | '비철';
+export type MaterialGroup = '탄소강' | '컬러강판' | 'STS' | '비철';
 export type CutMaterialKey =
   | 'SS400' | 'SPHC' | 'SPCC' | 'SECC' | 'SGCC'
   | 'SUS304' | 'SUS316' | 'SUS430'
@@ -74,7 +74,7 @@ export type NctRow = {
 
 export type CleanMatrixRow = {
   helpers: number;
-  perGroup: Record<MaterialGroup, { method: string; ratePerKg: number }>;
+  perGroup: Partial<Record<MaterialGroup, { method: string; ratePerKg: number }>>;
 };
 
 export type FreightRow = {

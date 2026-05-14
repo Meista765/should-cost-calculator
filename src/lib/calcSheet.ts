@@ -426,7 +426,9 @@ export function calcClean(
   if (!meta?.group) return { method: '', rate: 0, perEa: 0 };
   const row = lookupCleanRow(n, db);
   if (!row) return { method: '', rate: 0, perEa: 0 };
-  const cell = row.perGroup[meta.group];
+  // 컬러강판(도장 강판)은 모재가 탄소강이므로 세척 공정·단가를 탄소강 행에서 가져옴.
+  const cleanGroup: MaterialGroup = meta.group === '컬러강판' ? '탄소강' : meta.group;
+  const cell = row.perGroup[cleanGroup];
   if (!cell) return { method: '', rate: 0, perEa: 0 };
   const perEa = mat.netKg * cell.ratePerKg;
   return { method: cell.method, rate: cell.ratePerKg, perEa };

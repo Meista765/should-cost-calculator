@@ -134,7 +134,7 @@ export type MaterialOption = {
   density: number;
 };
 
-const GROUP_ORDER: Record<string, number> = { '탄소강': 0, 'STS': 1, '비철': 2 };
+const GROUP_ORDER: Record<string, number> = { '탄소강': 0, '컬러강판': 1, 'STS': 2, '비철': 3 };
 
 export function listAllMaterials(db: Db): MaterialOption[] {
   return [...db.materialMeta]
