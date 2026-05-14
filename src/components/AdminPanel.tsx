@@ -355,12 +355,12 @@ function CleanMatrixEditor({ data, onChange }: { data: CleanMatrixRow[]; onChang
 // ─── Column definitions ───────────────────────────────────────────────────────
 
 const CUT_KEYS = ['SS400','SPHC','SPCC','SECC','SGCC','SUS304','SUS316','SUS430','AL5052','AL6061','AL1050','황동','동판'] as const;
-const PROC_KEYS = ['레이저절단_4kW','레이저절단_6kW','벤딩_프레스브레이크','NCT_펀치프레스','용접_TIG','용접_MIG','용접_MAG','용접_CO2','용접_로봇','도장_부스','도장_소결로','디버링','태핑'] as const;
+const PROC_KEYS = ['레이저절단_4kW','레이저절단_6kW','벤딩_프레스브레이크','NCT_펀치프레스','용접_TIG','용접_MIG','용접_MAG','용접_CO2','용접_로봇','용접_점용접','도장_부스','도장_소결로','디버링','태핑'] as const;
 
 // grade ⇄ displayName 동기화: 입력란 하나로 두 필드 동시 업데이트 (조인 키 + 라벨)
 const COIL_COLS:    ColDef<CoilPriceRow>[]       = [{ key:'grade', label:'강종', kind:'str', w:'140px', mirror:'displayName' }, { key:'thickness', label:'두께(mm)', kind:'num', w:'85px' }, { key:'coilPrice', label:'코일가(원/kg)', kind:'num', w:'110px' }, { key:'scrapPrice', label:'스크랩(원/kg)', kind:'num', w:'115px' }];
 const PRESS_COLS:   ColDef<PressRateRow>[]        = [{ key:'kind', label:'종류', kind:'sel', opts:['단발','프로'], w:'80px' }, { key:'tonnage', label:'톤수(ton)', kind:'num', w:'90px' }, { key:'rate', label:'임율(원/hr)', kind:'num', w:'110px' }];
-const WORKER_COLS:  ColDef<WorkerRateRow>[]       = [{ key:'role', label:'직종', kind:'str' }, { key:'rate', label:'임율(원/hr)', kind:'num', w:'110px' }];
+const WORKER_COLS:  ColDef<WorkerRateRow>[]       = [{ key:'category', label:'업종', kind:'str', w:'140px' }, { key:'code', label:'직종코드', kind:'num', w:'80px' }, { key:'role', label:'직종명', kind:'str' }, { key:'rate', label:'임율(원/hr)', kind:'num', w:'110px' }];
 const META_COLS:    ColDef<MaterialMetaRow>[]     = [{ key:'grade', label:'강종', kind:'str', w:'140px' }, { key:'displayName', label:'강종명', kind:'str' }, { key:'cutKey', label:'절단 키', kind:'sel', opts:['', ...CUT_KEYS] }, { key:'group', label:'재질군', kind:'sel', opts:['','탄소강','STS','비철'], w:'80px' }, { key:'density', label:'비중(g/cm³)', kind:'num', w:'100px' }];
 const FREIGHT_COLS: ColDef<FreightRow>[]          = [{ key:'tonnage', label:'톤수', kind:'str', w:'65px' }, { key:'base', label:'기본(원)', kind:'num', w:'90px' }, { key:'r50_100', label:'50~100km', kind:'num', w:'90px' }, { key:'r100_300', label:'100~300km', kind:'num', w:'95px' }, { key:'r300plus', label:'300km+', kind:'num', w:'85px' }, { key:'loadFee', label:'상하차(원)', kind:'num', w:'90px' }, { key:'maxKg', label:'최대kg', kind:'num', w:'80px' }, { key:'maxM3', label:'최대m³', kind:'num', w:'80px' }, { key:'note', label:'비고', kind:'str' }];
 const OWN_COLS:     ColDef<OwnVehicleRow>[]       = [{ key:'tonnage', label:'톤수', kind:'str', w:'80px' }, { key:'fixPerHour', label:'고정(원/hr)', kind:'num', w:'110px' }, { key:'fuelPerKm', label:'연료(원/km)', kind:'num', w:'110px' }];
@@ -491,7 +491,7 @@ export default function AdminPanel({ db, bundle, etag, dek, role, onClose, onDbU
           makeEmpty={() => ({ kind:'단발', tonnage:0, rate:0 })} />;
       case 'worker':
         return <RowEditor<WorkerRateRow> data={d as WorkerRateRow[]} cols={WORKER_COLS} onChange={onTableChange}
-          makeEmpty={() => ({ role:'', rate:0 })} />;
+          makeEmpty={() => ({ role:'', rate:0, category:'', code:0 })} />;
       case 'materialMeta':
         return <RowEditor<MaterialMetaRow> data={d as MaterialMetaRow[]} cols={META_COLS} onChange={onTableChange}
           makeEmpty={() => ({ grade:'', gradeRaw:'', displayName:'', cutKey: undefined, group: undefined, density:0 })} />;

@@ -155,7 +155,11 @@ const press = parseTable(pressMd)
 
 const worker = parseTable(workerMd).map((r) => ({
   role: r['직종명'].trim(),
-  rate: num(r['노무임율(KRW/hr)'], `worker ${r['직종명']}`),
+  rate: num(r['시급(KRW/hr)'], `worker ${r['직종명']}`),
+  category: r['업종']?.trim() || undefined,
+  code: r['직종코드'] != null && r['직종코드'].trim() !== ''
+    ? num(r['직종코드'], `worker code ${r['직종명']}`)
+    : undefined,
 }));
 
 // === 판금 v10 11개 .md (material_meta 는 통합 카탈로그로 흡수됨) ===

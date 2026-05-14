@@ -33,9 +33,8 @@ export function emptyForm(): UnifiedFormSlice {
   return {
     processMethod: 'press',
     scrapRecovery: 0.9,
-    batchQty: 100,
+    batchQty: 10000,
     transRound: true,
-    weldPosFactor: 1,
     cleanUse: false,
     paintUse: false,
     priceOverride: false,
@@ -45,6 +44,7 @@ export function emptyForm(): UnifiedFormSlice {
     overheadRateOverride: 0.15,
     marginRateOverride: 0.15,
     postCostRows: [],
+    weldRows: [],
   };
 }
 

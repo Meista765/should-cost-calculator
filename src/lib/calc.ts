@@ -19,13 +19,10 @@ import type {
   ProcessInput,
   ProcessRateKey,
   UnifiedFormSlice,
-  WeldDetail,
-  WeldKind,
 } from '../types/domain';
 import {
   lookupPressRate,
   lookupProcessRate,
-  lookupWeldSpeed,
   lookupWorkerRate,
 } from './lookup';
 import {
@@ -36,7 +33,7 @@ import {
   calcNct,
   calcPaint,
   calcTransport,
-  calcWeld,
+  calcWeldAll,
   NCT_SHAPE_NAME,
   resolveMaterial,
   setupMinFromDb,
@@ -249,17 +246,21 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
 
   // 5) 공용 라인아이템
   const clean = calcClean(input, db, mat);
-  const weld = calcWeld(input, db);
+  const weld = calcWeldAll(input.weldRows, input.thkMm ?? 0, db);
   const paint = calcPaint(input, db);
   const trans = calcTransport(input, db);
-  if (trans.overWeight && trans.kgPerTrip != null && trans.maxKg != null) {
+  if (trans.overWeight && trans.maxKg != null && trans.partWeightKg != null && trans.userLoadEa != null) {
+    const raw = trans.userLoadEa * trans.partWeightKg;
+    const suffix = trans.clipped ? ' (선행 한계로 자동 클립됨)' : '';
     warnings.push(
-      `회당 적재 무게 ${trans.kgPerTrip.toLocaleString()}kg가 ${input.transTon ?? '선택 차량'} 한계 ${trans.maxKg.toLocaleString()}kg를 초과합니다.`,
+      `회당 적재 무게 ${raw.toLocaleString(undefined, { maximumFractionDigits: 0 })}kg가 ${input.transTon ?? '선택 차량'} 한계 ${trans.maxKg.toLocaleString()}kg를 초과합니다.${suffix}`,
     );
   }
-  if (trans.overVolume && trans.m3PerTrip != null && trans.maxM3 != null) {
+  if (trans.overVolume && trans.maxM3 != null && trans.partBoxM3 != null && trans.userLoadEa != null) {
+    const raw = trans.userLoadEa * trans.partBoxM3;
+    const suffix = trans.clipped ? ' (선행 한계로 자동 클립됨)' : '';
     warnings.push(
-      `회당 적재 부피 ${trans.m3PerTrip.toLocaleString()}m³가 ${input.transTon ?? '선택 차량'} 한계 ${trans.maxM3.toLocaleString()}m³를 초과합니다.`,
+      `회당 적재 부피 ${raw.toLocaleString(undefined, { maximumFractionDigits: 2 })}m³가 ${input.transTon ?? '선택 차량'} 한계 ${trans.maxM3.toLocaleString()}m³를 초과합니다.${suffix}`,
     );
   }
   const postEa = (input.postCostRows ?? []).reduce(
@@ -268,9 +269,11 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
   );
 
   const processCost =
-    pressTotal + laserCost + bendCost + nctEa + clean.perEa + weld.perEa + paint.perEa;
+    pressTotal + laserCost + bendCost + nctEa + clean.perEa + weld.totalPerEa + paint.perEa;
   const totalCost = mat.netMatCost + processCost;
   const direct = totalCost + trans.perEa + postEa;
+  // 일반관리비·이윤 기준은 재료비를 제외한 가공·운반·후공정 합계.
+  const overheadBase = processCost + trans.perEa + postEa;
 
   if (!Number.isFinite(direct)) {
     return {
@@ -282,6 +285,7 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
   // 6) 일반관리비 · 이윤 → should-cost
   const margin = applyMarginOverhead({
     direct,
+    overheadBase,
     assumptions: db.assumptions,
     overrides: {
       overheadRate: input.overheadRateOverride,
@@ -323,36 +327,7 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
     };
   }
 
-  let weldDetail: WeldDetail | undefined;
-  if (input.weldKind) {
-    const kind = input.weldKind as WeldKind;
-    const weldRateKeyMap: Record<WeldKind, ProcessRateKey> = {
-      TIG: '용접_TIG',
-      MIG: '용접_MIG',
-      MAG: '용접_MAG',
-      CO2: '용접_CO2',
-      Robot: '용접_로봇',
-      Spot: '용접_TIG',
-    };
-    const rateKey = weldRateKeyMap[kind];
-    const weldRate = lookupProcessRate(rateKey, db);
-    const speed =
-      kind === 'Spot' ? 0 : lookupWeldSpeed(kind, input.thkMm ?? 0, db);
-    let pos = input.weldPosFactor ?? 1.0;
-    if (pos === 0) pos = 1.0;
-    weldDetail = {
-      kind,
-      weldMin: weld.weldMin,
-      perEa: weld.perEa,
-      rate: weldRate,
-      rateKey,
-      posFactor: pos,
-      spots: input.weldSpots ?? 0,
-      spotSec: db.assumptions.spotSec,
-      lengthMm: input.weldLenMm ?? 0,
-      speed,
-    };
-  }
+  const weldDetails = weld.details.length > 0 ? weld.details : undefined;
 
   let paintDetail: PaintDetail | undefined;
   if (input.paintUse) {
@@ -379,6 +354,7 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
     processCost,
     transportCost: trans.perEa,
     postCost: postEa,
+    overheadBase: margin.overheadBase,
     overheadRate: margin.appliedOverheadRate,
     marginRate: margin.appliedMarginRate,
     overheadCost: margin.overheadCost,
@@ -400,7 +376,7 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
     bendCost: input.processMethod === 'sheet' ? bendCost : undefined,
     nctCost: input.processMethod === 'sheet' ? nctEa : undefined,
     cleanCost: clean.perEa,
-    weldCost: weld.perEa,
+    weldCost: weld.totalPerEa,
     paintCost: paint.perEa,
     transportCost: trans.perEa,
     transportDetail: {
@@ -414,10 +390,19 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
       boxPerPallet: trans.boxPerPallet,
       palletPerCar: trans.palletPerCar,
       boxesPerTrip: trans.boxesPerTrip,
+      partWeightKg: trans.partWeightKg,
+      partBoxM3: trans.partBoxM3,
       kgPerTrip: trans.kgPerTrip,
       m3PerTrip: trans.m3PerTrip,
       maxKg: trans.maxKg,
       maxM3: trans.maxM3,
+      weightCapacityEa: trans.weightCapacityEa,
+      volumeCapacityEa: trans.volumeCapacityEa,
+      capacityEa: trans.capacityEa,
+      bindingConstraint: trans.bindingConstraint,
+      userLoadEa: trans.userLoadEa,
+      appliedLoadEa: trans.appliedLoadEa,
+      clipped: trans.clipped,
       overWeight: trans.overWeight,
       overVolume: trans.overVolume,
     },
@@ -433,7 +418,7 @@ export function computeBreakdown(input: UnifiedFormSlice, db: Db): CostBreakdown
     bendDetail,
     nctDetail,
     cleanDetail,
-    weldDetail,
+    weldDetails,
     paintDetail,
     pressDetail,
     marginDetail,

@@ -1073,6 +1073,86 @@ button.primary:disabled { background: #6f8ad7; border-color: #6f8ad7; }
   font-weight: 600;
 }
 
+.transport-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.transport-compare .compare-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+
+.transport-compare .compare-row.binding {
+  color: var(--text);
+}
+
+.transport-compare .compare-row.user-load {
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+  color: var(--text);
+}
+
+.transport-compare .compare-row.applied-load.ok {
+  color: var(--ok-text);
+}
+
+.transport-compare .compare-row.applied-load.over {
+  color: var(--up);
+  font-weight: 600;
+}
+
+.transport-compare .compare-label {
+  font-weight: 600;
+}
+
+.transport-compare .compare-expr {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.transport-compare .compare-result {
+  font-variant-numeric: tabular-nums;
+}
+
+.transport-compare .compare-result b {
+  color: inherit;
+}
+
+.transport-compare .binding-mark {
+  color: var(--up);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transport-compare-hint {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+  .transport-compare .compare-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 /* ── Post-cost preview ── */
 
 .post-preview {

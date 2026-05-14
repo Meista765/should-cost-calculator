@@ -214,7 +214,13 @@ export function lookupProcessRate(
   db: Db,
 ): number {
   const row = db.processRates.find((r) => r.key === key);
-  return row?.rate ?? 0;
+  if (row) return row.rate;
+  // 번들이 stale 상태에서 점용접 행이 없을 때 TIG로 폴백 — 재암호화 전에도 동작 보장.
+  if (key === '용접_점용접') {
+    const tig = db.processRates.find((r) => r.key === '용접_TIG');
+    return tig?.rate ?? 0;
+  }
+  return 0;
 }
 
 export function lookupFreight(tonnage: string, db: Db) {

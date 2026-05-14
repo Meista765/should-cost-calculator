@@ -17,6 +17,8 @@ export type PressRateRow = {
 export type WorkerRateRow = {
   role: string;
   rate: number;
+  category?: string;
+  code?: number;
 };
 
 // ----- v10 판금 모델 -----
@@ -103,6 +105,7 @@ export type ProcessRateKey =
   | '용접_MAG'
   | '용접_CO2'
   | '용접_로봇'
+  | '용접_점용접'
   | '도장_부스'
   | '도장_소결로'
   | '디버링'
@@ -196,11 +199,8 @@ export type UnifiedFormSlice = {
   cleanUse?: boolean;
   cleanN?: number;
 
-  // 용접 — 공용
-  weldKind?: WeldKind | '';
-  weldLenMm?: number;
-  weldSpots?: number;
-  weldPosFactor?: number;
+  // 용접 — 공용 (다중 행: 시밍 + 점용접 동시 사용 가능)
+  weldRows: WeldRow[];
 
   // 분체 도장 — 공용
   paintUse?: boolean;
@@ -219,8 +219,6 @@ export type UnifiedFormSlice = {
   transEaPerBox?: number;       // EA/box
   transBoxPerPallet?: number;   // box/pallet
   transPalletPerCar?: number;   // pallet/car
-  transBoxWeightKg?: number;    // kg/box (한계 검증용, 선택)
-  transBoxVolumeM3?: number;    // m³/box (한계 검증용, 선택)
 
   // 일반관리비·이윤 + 후공정 — 공용
   overheadRateOverride?: number;
@@ -239,10 +237,19 @@ export type TransportTrace = {
   boxPerPallet?: number;
   palletPerCar?: number;
   boxesPerTrip?: number;
+  partWeightKg?: number;
+  partBoxM3?: number;
   kgPerTrip?: number;
   m3PerTrip?: number;
   maxKg?: number;
   maxM3?: number;
+  weightCapacityEa?: number;
+  volumeCapacityEa?: number;
+  capacityEa?: number;
+  bindingConstraint?: 'weight' | 'volume';
+  userLoadEa?: number;
+  appliedLoadEa?: number;
+  clipped: boolean;
   overWeight: boolean;
   overVolume: boolean;
 };
@@ -323,7 +330,14 @@ export type CleanDetail = {
   group?: MaterialGroup;
 };
 
-export type WeldDetail = {
+export type WeldRow = {
+  kind: WeldKind;
+  lengthMm?: number;        // seam 전용
+  spots?: number;           // spot 전용
+  posFactor?: number;       // 미입력/0이면 1.0
+};
+
+export type WeldRowDetail = {
   kind: WeldKind;
   weldMin: number;
   perEa: number;
@@ -375,6 +389,7 @@ export type MarginDetail = {
   processCost: number;
   transportCost: number;
   postCost: number;
+  overheadBase: number;      // 재료비 제외 = processCost + transportCost + postCost
   overheadRate: number;
   marginRate: number;
   overheadCost: number;
@@ -417,7 +432,7 @@ export type CostBreakdown = {
   bendDetail?: BendDetail;
   nctDetail?: NctDetail;
   cleanDetail?: CleanDetail;
-  weldDetail?: WeldDetail;
+  weldDetails?: WeldRowDetail[];
   paintDetail?: PaintDetail;
   pressDetail?: PressDetail;
   marginDetail?: MarginDetail;

@@ -159,15 +159,24 @@ export type TransportResult = {
   total: number;
   perEa: number;
   loadSource: 'hierarchy' | 'direct' | 'none';
-  effectiveLoad: number;
+  effectiveLoad: number;            // 운반비 계산에 실제로 사용된 회당 EA (= appliedLoadEa)
   eaPerBox?: number;
   boxPerPallet?: number;
   palletPerCar?: number;
   boxesPerTrip?: number;
+  partWeightKg?: number;
+  partBoxM3?: number;
   kgPerTrip?: number;
   m3PerTrip?: number;
   maxKg?: number;
   maxM3?: number;
+  weightCapacityEa?: number;        // 무게 기준 한계 EA/회
+  volumeCapacityEa?: number;        // 체적 기준 한계 EA/회
+  capacityEa?: number;              // MIN(존재하는 것) = 선행 한계
+  bindingConstraint?: 'weight' | 'volume';
+  userLoadEa?: number;              // 사용자가 입력한(클립 전) 회당 EA
+  appliedLoadEa?: number;           // 클립 적용 후 회당 EA
+  clipped: boolean;
   overWeight: boolean;
   overVolume: boolean;
 };
@@ -185,19 +194,82 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
   const hierarchyComplete = eaPerBox > 0 && boxPerPallet > 0 && palletPerCar > 0;
   const hierarchyLoad = hierarchyComplete ? eaPerBox * boxPerPallet * palletPerCar : 0;
   const directLoad = inp.transLoad ?? 0;
-  const effectiveLoad = hierarchyLoad > 0 ? hierarchyLoad : directLoad;
+  const userLoadEa = hierarchyLoad > 0 ? hierarchyLoad : directLoad;
   const loadSource: 'hierarchy' | 'direct' | 'none' =
     hierarchyLoad > 0 ? 'hierarchy' : directLoad > 0 ? 'direct' : 'none';
 
   const boxesPerTrip = boxPerPallet > 0 && palletPerCar > 0 ? boxPerPallet * palletPerCar : 0;
+
+  // 제품 1 EA 의 중량/외접부피 — 폼 상단 입력에서 자동 유추 (수동 입력 없이 차량 한계 검증)
+  const density = resolveMaterial(inp.material ?? '', db)?.density ?? 0;
+  const vol = inp.volMm3 ?? 0;
+  const partWeightKg = vol > 0 && density > 0 ? (vol * density) / 1_000_000 : 0;
+  const pw = inp.partWidth ?? 0;
+  const pl = inp.partLength ?? 0;
+  const ph = inp.partHeight ?? 0;
+  const partBoxM3 = pw > 0 && pl > 0 && ph > 0 ? (pw * pl * ph) / 1_000_000_000 : 0;
+
+  // 차량 한계 — method 결정 후에 산출되지만, capacityEa 가 effectiveLoad/trips 에 영향을 주므로 먼저 결정
+  let maxKg: number | undefined;
+  let maxM3: number | undefined;
+  if (method === '용달') {
+    const row = lookupFreight(tonnage, db);
+    if (row) {
+      maxKg = row.maxKg;
+      maxM3 = row.maxM3;
+    }
+  } else if (method === '자체') {
+    const freight = lookupFreight(tonnage, db);
+    if (freight) {
+      maxKg = freight.maxKg;
+      maxM3 = freight.maxM3;
+    }
+  }
+
+  // per-constraint capacity (선행 한계 = 둘 중 더 빨리 차는 쪽)
+  const weightCapacityEa =
+    partWeightKg > 0 && maxKg != null && maxKg > 0
+      ? Math.max(0, Math.floor(maxKg / partWeightKg))
+      : undefined;
+  const volumeCapacityEa =
+    partBoxM3 > 0 && maxM3 != null && maxM3 > 0
+      ? Math.max(0, Math.floor(maxM3 / partBoxM3))
+      : undefined;
+  let capacityEa: number | undefined;
+  let bindingConstraint: 'weight' | 'volume' | undefined;
+  if (weightCapacityEa != null && volumeCapacityEa != null) {
+    if (weightCapacityEa <= volumeCapacityEa) {
+      capacityEa = weightCapacityEa;
+      bindingConstraint = 'weight';
+    } else {
+      capacityEa = volumeCapacityEa;
+      bindingConstraint = 'volume';
+    }
+  } else if (weightCapacityEa != null) {
+    capacityEa = weightCapacityEa;
+    bindingConstraint = 'weight';
+  } else if (volumeCapacityEa != null) {
+    capacityEa = volumeCapacityEa;
+    bindingConstraint = 'volume';
+  }
+
+  // 사용자 입력이 선행 한계를 초과하면 capacityEa 로 클립
+  const appliedLoadEa =
+    capacityEa != null && capacityEa > 0 && userLoadEa > capacityEa ? capacityEa : userLoadEa;
+  const clipped = capacityEa != null && capacityEa > 0 && appliedLoadEa < userLoadEa;
+  const effectiveLoad = appliedLoadEa;
+
+  // per-trip 실측치는 클립 후 (appliedLoadEa) 기준 — UI/경고에 표시
   const kgPerTrip =
-    boxesPerTrip > 0 && (inp.transBoxWeightKg ?? 0) > 0
-      ? boxesPerTrip * (inp.transBoxWeightKg as number)
-      : undefined;
+    appliedLoadEa > 0 && partWeightKg > 0 ? appliedLoadEa * partWeightKg : undefined;
   const m3PerTrip =
-    boxesPerTrip > 0 && (inp.transBoxVolumeM3 ?? 0) > 0
-      ? boxesPerTrip * (inp.transBoxVolumeM3 as number)
-      : undefined;
+    appliedLoadEa > 0 && partBoxM3 > 0 ? appliedLoadEa * partBoxM3 : undefined;
+
+  // overWeight/overVolume 은 클립 전(사용자 입력) 기준으로 판정 — 경고 트리거용
+  const overWeight =
+    maxKg != null && partWeightKg > 0 && userLoadEa * partWeightKg > maxKg;
+  const overVolume =
+    maxM3 != null && partBoxM3 > 0 && userLoadEa * partBoxM3 > maxM3;
 
   const traceBase = {
     loadSource,
@@ -206,8 +278,16 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
     boxPerPallet: boxPerPallet > 0 ? boxPerPallet : undefined,
     palletPerCar: palletPerCar > 0 ? palletPerCar : undefined,
     boxesPerTrip: boxesPerTrip > 0 ? boxesPerTrip : undefined,
+    partWeightKg: partWeightKg > 0 ? partWeightKg : undefined,
+    partBoxM3: partBoxM3 > 0 ? partBoxM3 : undefined,
     kgPerTrip,
     m3PerTrip,
+    weightCapacityEa,
+    volumeCapacityEa,
+    capacityEa,
+    bindingConstraint,
+    userLoadEa: userLoadEa > 0 ? userLoadEa : undefined,
+    appliedLoadEa: appliedLoadEa > 0 ? appliedLoadEa : undefined,
   } as const;
 
   const zero: TransportResult = {
@@ -216,15 +296,16 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
     total: 0,
     perEa: 0,
     ...traceBase,
+    maxKg,
+    maxM3,
+    clipped: false,
     overWeight: false,
     overVolume: false,
   };
 
-  if (!method || distance <= 0 || effectiveLoad <= 0) return zero;
+  if (!method || distance <= 0 || appliedLoadEa <= 0) return zero;
 
   let perTrip = 0;
-  let maxKg: number | undefined;
-  let maxM3: number | undefined;
   if (method === '용달') {
     const row = lookupFreight(tonnage, db);
     if (!row) return zero;
@@ -240,8 +321,6 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
         200 * row.r100_300 +
         (d - 300) * row.r300plus;
     perTrip = (base + row.loadFee) * (roundTrip ? 1.6 : 1.0);
-    maxKg = row.maxKg;
-    maxM3 = row.maxM3;
   } else if (method === '자체') {
     const row = lookupOwnVehicle(tonnage, db);
     if (!row) return zero;
@@ -253,11 +332,9 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
     return zero;
   }
 
-  const trips = Math.ceil(batch / effectiveLoad);
+  const trips = Math.ceil(batch / appliedLoadEa);
   const total = perTrip * trips;
   const perEa = batch > 0 ? total / batch : 0;
-  const overWeight = maxKg != null && kgPerTrip != null && kgPerTrip > maxKg;
-  const overVolume = maxM3 != null && m3PerTrip != null && m3PerTrip > maxM3;
   return {
     perTrip,
     trips,
@@ -266,6 +343,7 @@ export function calcTransport(inp: UnifiedFormSlice, db: Db): TransportResult {
     ...traceBase,
     maxKg,
     maxM3,
+    clipped,
     overWeight,
     overVolume,
   };
@@ -355,38 +433,62 @@ export function calcClean(
 }
 
 // ---------- 용접 ----------
-export type WeldResult = { weldMin: number; perEa: number };
+import type { WeldRow, WeldRowDetail } from '../types/domain';
 
-const WELD_RATE_KEY: Record<WeldKind, import('../types/domain').ProcessRateKey> = {
+export const WELD_RATE_KEY: Record<WeldKind, import('../types/domain').ProcessRateKey> = {
   TIG: '용접_TIG',
   MIG: '용접_MIG',
   MAG: '용접_MAG',
   CO2: '용접_CO2',
   Robot: '용접_로봇',
-  Spot: '용접_TIG',
+  Spot: '용접_점용접',
 };
 
-export function calcWeld(inp: UnifiedFormSlice, db: Db): WeldResult {
-  const kind = inp.weldKind;
-  if (!kind) return { weldMin: 0, perEa: 0 };
-
-  const length = inp.weldLenMm ?? 0;
-  const spots = inp.weldSpots ?? 0;
-  let pos = inp.weldPosFactor ?? 1.0;
-  if (pos === 0) pos = 1.0;
-  const thk = inp.thkMm ?? 0;
+export function calcWeldRow(row: WeldRow, thkMm: number, db: Db): WeldRowDetail {
+  const pos = row.posFactor && row.posFactor > 0 ? row.posFactor : 1.0;
+  const rateKey = WELD_RATE_KEY[row.kind];
+  const rate = lookupProcessRate(rateKey, db);
 
   let weldMin = 0;
-  if (kind === 'Spot') {
+  let speed = 0;
+  const length = row.lengthMm ?? 0;
+  const spots = row.spots ?? 0;
+  if (row.kind === 'Spot') {
     weldMin = (spots * db.assumptions.spotSec / 60) * pos;
   } else {
-    const speed = lookupWeldSpeed(kind, thk, db);
-    if (speed === 0 || length <= 0) return { weldMin: 0, perEa: 0 };
-    weldMin = (length / speed) * pos;
+    speed = lookupWeldSpeed(row.kind, thkMm, db);
+    if (speed > 0 && length > 0) weldMin = (length / speed) * pos;
   }
-  const rate = lookupProcessRate(WELD_RATE_KEY[kind], db);
   const perEa = (weldMin * rate) / 60;
-  return { weldMin, perEa };
+  return {
+    kind: row.kind,
+    weldMin,
+    perEa,
+    rate,
+    rateKey,
+    posFactor: pos,
+    spots,
+    spotSec: db.assumptions.spotSec,
+    lengthMm: length,
+    speed,
+  };
+}
+
+export type WeldTotal = { details: WeldRowDetail[]; totalPerEa: number };
+
+export function calcWeldAll(
+  rows: WeldRow[] | undefined,
+  thkMm: number,
+  db: Db,
+): WeldTotal {
+  const details: WeldRowDetail[] = [];
+  let totalPerEa = 0;
+  for (const r of rows ?? []) {
+    const d = calcWeldRow(r, thkMm, db);
+    details.push(d);
+    totalPerEa += d.perEa;
+  }
+  return { details, totalPerEa };
 }
 
 // ---------- 분체 도장 ----------

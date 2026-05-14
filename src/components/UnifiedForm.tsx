@@ -7,6 +7,8 @@ import type {
   TransportMethod,
   UnifiedFormSlice,
   WeldKind,
+  WeldRow,
+  WeldRowDetail,
 } from '../types/domain';
 import { listAllMaterials } from '../lib/lookup';
 import { ProcessRowList } from './ProcessRowList';
@@ -15,7 +17,7 @@ import { TransportPreview } from './TransportPreview';
 import { PostCostPreview } from './PostCostPreview';
 import { PressPreview } from './PressPreview';
 import { FormulaRow, SectionFormula, fmtN } from './SectionFormula';
-import { TransportLoadInputs, TransportLimitInputs } from './transport';
+import { TransportLoadInputs } from './transport';
 import { FoldableProcessCard } from './FoldableProcessCard';
 
 type Props = {
@@ -166,6 +168,154 @@ function PostCostTable(props: {
   );
 }
 
+const WELD_KIND_OPTIONS: WeldKind[] = ['TIG', 'MIG', 'MAG', 'CO2', 'Robot', 'Spot'];
+
+function WeldRowsTable(props: {
+  rows: WeldRow[];
+  onChange: (next: WeldRow[]) => void;
+}) {
+  const { rows, onChange } = props;
+  const patchRow = (i: number, patch: Partial<WeldRow>) =>
+    onChange(rows.map((r, ri) => (ri === i ? { ...r, ...patch } : r)));
+  const insertEmpty = (i: number) => {
+    const next = rows.slice();
+    next.splice(i + 1, 0, { kind: 'TIG', posFactor: 1 });
+    onChange(next);
+  };
+  const dup = (i: number) => {
+    const next = rows.slice();
+    next.splice(i + 1, 0, { ...rows[i] });
+    onChange(next);
+  };
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= rows.length) return;
+    const next = rows.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  const del = (i: number) => onChange(rows.filter((_, ri) => ri !== i));
+  const add = () => onChange([...rows, { kind: 'TIG', posFactor: 1 }]);
+
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-grid-table">
+        <thead>
+          <tr>
+            <th style={{ width: '90px' }}>용접 종류</th>
+            <th style={{ width: '110px' }}>용접 길이(mm)</th>
+            <th style={{ width: '110px' }}>점용접 점수(점)</th>
+            <th style={{ width: '90px' }}>자세계수</th>
+            <th style={{ width: '152px' }}>관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted small" style={{ textAlign: 'center' }}>
+                행을 추가하세요
+              </td>
+            </tr>
+          )}
+          {rows.map((row, i) => {
+            const isSpot = row.kind === 'Spot';
+            return (
+              <tr key={i}>
+                <td>
+                  <select
+                    value={row.kind}
+                    aria-label={`용접 ${i + 1} 종류`}
+                    onChange={(e) => patchRow(i, { kind: e.target.value as WeldKind })}
+                  >
+                    {WELD_KIND_OPTIONS.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step={1}
+                    min={0}
+                    inputMode="decimal"
+                    value={row.lengthMm ?? ''}
+                    disabled={isSpot}
+                    aria-label={`용접 ${i + 1} 길이`}
+                    onChange={(e) => patchRow(i, { lengthMm: parseFiniteNumber(e.target.value) })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step={1}
+                    min={0}
+                    inputMode="decimal"
+                    value={row.spots ?? ''}
+                    disabled={!isSpot}
+                    aria-label={`용접 ${i + 1} 점수`}
+                    onChange={(e) => patchRow(i, { spots: parseFiniteNumber(e.target.value) })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    inputMode="decimal"
+                    value={row.posFactor ?? ''}
+                    placeholder="1.0"
+                    aria-label={`용접 ${i + 1} 자세계수`}
+                    onChange={(e) => patchRow(i, { posFactor: parseFiniteNumber(e.target.value) })}
+                  />
+                </td>
+                <td>
+                  <div className="admin-row-actions">
+                    <button type="button" className="admin-row-btn" title="이 행 아래에 빈 행 삽입" onClick={() => insertEmpty(i)} aria-label="빈 행 삽입">＋</button>
+                    <button type="button" className="admin-row-btn" title="이 행 아래에 복제 삽입" onClick={() => dup(i)} aria-label="복제">⎘</button>
+                    <button type="button" className="admin-row-btn" title="위로" onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로">↑</button>
+                    <button type="button" className="admin-row-btn" title="아래로" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label="아래로">↓</button>
+                    <button type="button" className="admin-row-btn admin-row-del" title="삭제" onClick={() => del(i)} aria-label="삭제">−</button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <button type="button" className="admin-add-row" onClick={add}>
+        <span className="admin-add-row-icon" aria-hidden>+</span>
+        <span>맨 아래에 행 추가</span>
+      </button>
+    </div>
+  );
+}
+
+function WeldRowsPreview({ details, thkMm }: { details: WeldRowDetail[] | undefined; thkMm: number }) {
+  if (!details || details.length === 0) return null;
+  return (
+    <div className="section-formula" aria-label="용접 행별 계산식">
+      <div className="sf-head">행별 계산식</div>
+      <div className="sf-body">
+        {details.map((d, i) => {
+          const ratePerMin = d.rate / 60;
+          if (d.kind === 'Spot') {
+            return (
+              <FormulaRow key={i} label={`#${i + 1} ${d.kind}`}>
+                {fmtN(d.spots)} × {fmtN(d.spotSec, 2)}/60 × {fmtN(d.posFactor, 2)} = {fmtN(d.weldMin, 3)} 분/EA × {fmtN(ratePerMin, 2)} 원/분 → <b>{fmtN(d.perEa)} 원/EA</b>
+              </FormulaRow>
+            );
+          }
+          return (
+            <FormulaRow key={i} label={`#${i + 1} ${d.kind}`}>
+              lookup({d.kind}, {fmtN(thkMm, 2)}mm)={fmtN(d.speed)} mm/분, {fmtN(d.lengthMm)}/{fmtN(d.speed)} × {fmtN(d.posFactor, 2)} = {fmtN(d.weldMin, 3)} 분/EA × {fmtN(ratePerMin, 2)} 원/분 → <b>{fmtN(d.perEa)} 원/EA</b>
+            </FormulaRow>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PercentInput(props: {
   label: string;
   value?: number;
@@ -273,7 +423,7 @@ export function UnifiedForm({
           <NumberInput label="두께" unit="mm" value={value.thkMm} step={0.1} onChange={(v) => onPatch({ thkMm: v })} placeholder="예: 2.0" />
           <NumberInput label="폭" unit="mm" value={value.xMm} step={1} onChange={(v) => onPatch({ xMm: v })} placeholder="예: 200" />
           <NumberInput label="길이" unit="mm" value={value.yMm} step={1} onChange={(v) => onPatch({ yMm: v })} placeholder="예: 150" />
-          <NumberInput label="연간 예상물량" unit="EA/년" value={value.batchQty} step={1} onChange={(v) => onPatch({ batchQty: v })} placeholder="예: 100" />
+          <NumberInput label="연간 예상물량" unit="EA/년" value={value.batchQty} step={1} onChange={(v) => onPatch({ batchQty: v })} placeholder="예: 10,000" />
           <NumberInput
             label="재료 단가"
             unit="원/kg"
@@ -534,61 +684,26 @@ export function UnifiedForm({
 
       <FoldableProcessCard
         title="용접"
-        open={!!value.weldKind}
-        onToggle={() => onPatch({ weldKind: value.weldKind ? '' : 'TIG' })}
+        open={value.weldRows.length > 0}
+        onToggle={() => {
+          if (value.weldRows.length > 0) onPatch({ weldRows: [] });
+          else onPatch({ weldRows: [{ kind: 'TIG', posFactor: 1 }] });
+        }}
       >
-        <div className="grid grid-3">
-          <label className="field">
-            <span className="field-label">용접 종류</span>
-            <select
-              value={value.weldKind ?? ''}
-              onChange={(e) => onPatch({ weldKind: e.target.value as WeldKind })}
-            >
-              {(['TIG', 'MIG', 'MAG', 'CO2', 'Robot', 'Spot'] as WeldKind[]).map((k) => (
-                <option key={k} value={k}>{k}</option>
+        <WeldRowsTable
+          rows={value.weldRows}
+          onChange={(next) => onPatch({ weldRows: next })}
+        />
+        <WeldRowsPreview details={breakdown.weldDetails} thkMm={value.thkMm ?? 0} />
+        {breakdown.weldDetails && breakdown.weldDetails.length > 0 && (
+          <SectionFormula label="용접비 합계" result={breakdown.weldCost ?? 0}>
+            <FormulaRow label="합계식">
+              {breakdown.weldDetails.map((d, i) => (
+                <span key={i}>{i > 0 ? ' + ' : ''}{fmtN(d.perEa)}</span>
               ))}
-            </select>
-          </label>
-          <NumberInput label="용접 길이" unit="mm" value={value.weldLenMm} step={1} onChange={(v) => onPatch({ weldLenMm: v })} />
-          <NumberInput label="점용접 점수" unit="점" value={value.weldSpots} step={1} onChange={(v) => onPatch({ weldSpots: v })} />
-          <NumberInput label="자세계수" value={value.weldPosFactor} step={0.1} onChange={(v) => onPatch({ weldPosFactor: v })} placeholder="1.0" hint="아래/수평/수직 등 보정" />
-        </div>
-        {breakdown.weldDetail && breakdown.weldDetail.perEa > 0 && (
-          <SectionFormula label="용접비" result={breakdown.weldDetail.perEa}>
-            {(() => {
-              const w = breakdown.weldDetail!;
-              if (w.kind === 'Spot') {
-                return (
-                  <>
-                    <FormulaRow label="용접시간">
-                      스팟수 × 스팟초/60 × 자세계수 = {fmtN(w.spots)} × {fmtN(w.spotSec, 2)}/60 × {fmtN(w.posFactor, 2)} = <b>{fmtN(w.weldMin, 3)} 분/EA</b>
-                    </FormulaRow>
-                    <FormulaRow label="임율">
-                      {w.rateKey} = <b>{fmtN(w.rate)} 원/분</b>
-                    </FormulaRow>
-                    <FormulaRow label="용접비">
-                      시간 × 임율 = {fmtN(w.weldMin, 3)} × {fmtN(w.rate)} = <b>{fmtN(w.perEa)} 원/EA</b>
-                    </FormulaRow>
-                  </>
-                );
-              }
-              return (
-                <>
-                  <FormulaRow label="용접속도">
-                    lookup({w.kind}, {fmtN(value.thkMm ?? 0, 2)} mm) = <b>{fmtN(w.speed)} mm/분</b>
-                  </FormulaRow>
-                  <FormulaRow label="용접시간">
-                    길이/속도 × 자세계수 = {fmtN(w.lengthMm)}/{fmtN(w.speed)} × {fmtN(w.posFactor, 2)} = <b>{fmtN(w.weldMin, 3)} 분/EA</b>
-                  </FormulaRow>
-                  <FormulaRow label="임율">
-                    {w.rateKey} = <b>{fmtN(w.rate)} 원/분</b>
-                  </FormulaRow>
-                  <FormulaRow label="용접비">
-                    시간 × 임율 = {fmtN(w.weldMin, 3)} × {fmtN(w.rate)} = <b>{fmtN(w.perEa)} 원/EA</b>
-                  </FormulaRow>
-                </>
-              );
-            })()}
+              {' = '}
+              <b>{fmtN(breakdown.weldCost ?? 0)} 원/EA</b>
+            </FormulaRow>
           </SectionFormula>
         )}
       </FoldableProcessCard>
@@ -668,7 +783,6 @@ export function UnifiedForm({
           </label>
         </div>
         <TransportLoadInputs value={value} onPatch={onPatch} />
-        <TransportLimitInputs value={value} onPatch={onPatch} />
         <TransportPreview value={value} db={db} />
         {breakdown.transportDetail && breakdown.transportDetail.loadSource !== 'none' && (breakdown.transportCost ?? 0) > 0 && (
           <SectionFormula label="운반비" result={breakdown.transportCost ?? 0}>
@@ -679,7 +793,13 @@ export function UnifiedForm({
                 <>
                   <FormulaRow label="회당 적재">
                     {t.loadSource === 'hierarchy' && t.eaPerBox && t.boxPerPallet && t.palletPerCar ? (
-                      <>{fmtN(t.eaPerBox)} × {fmtN(t.boxPerPallet)} × {fmtN(t.palletPerCar)} = <b>{fmtN(t.effectiveLoad)} EA/회</b></>
+                      t.clipped && t.userLoadEa != null && t.capacityEa != null ? (
+                        <>
+                          min({fmtN(t.eaPerBox)} × {fmtN(t.boxPerPallet)} × {fmtN(t.palletPerCar)}, {fmtN(t.capacityEa)}) = <b>{fmtN(t.effectiveLoad)} EA/회</b> (선행 한계 적용)
+                        </>
+                      ) : (
+                        <>{fmtN(t.eaPerBox)} × {fmtN(t.boxPerPallet)} × {fmtN(t.palletPerCar)} = <b>{fmtN(t.effectiveLoad)} EA/회</b></>
+                      )
                     ) : (
                       <><b>{fmtN(t.effectiveLoad)} EA/회</b> (직접 입력)</>
                     )}
@@ -744,10 +864,10 @@ export function UnifiedForm({
                     재료 + 가공 + 운반 + 후공정 = {fmtN(md.materialCost)} + {fmtN(md.processCost)} + {fmtN(md.transportCost)} + {fmtN(md.postCost)} = <b>{fmtN(md.direct)} 원/EA</b>
                   </FormulaRow>
                   <FormulaRow label="일반관리비">
-                    직접비 × {fmtN(md.overheadRate * 100, 1)}% = {fmtN(md.direct)} × {fmtN(md.overheadRate, 4)} = <b>{fmtN(md.overheadCost)} 원/EA</b>
+                    (가공 + 운반 + 후공정) × {fmtN(md.overheadRate * 100, 1)}% = {fmtN(md.overheadBase)} × {fmtN(md.overheadRate, 4)} = <b>{fmtN(md.overheadCost)} 원/EA</b>
                   </FormulaRow>
                   <FormulaRow label="이윤">
-                    (직접비 + 관리비) × {fmtN(md.marginRate * 100, 1)}% = {fmtN(md.direct + md.overheadCost)} × {fmtN(md.marginRate, 4)} = <b>{fmtN(md.profitCost)} 원/EA</b>
+                    (가공 + 운반 + 후공정 + 관리비) × {fmtN(md.marginRate * 100, 1)}% = {fmtN(md.overheadBase + md.overheadCost)} × {fmtN(md.marginRate, 4)} = <b>{fmtN(md.profitCost)} 원/EA</b>
                   </FormulaRow>
                   <FormulaRow label="합계">
                     직접 + 관리 + 이윤 = <b>{fmtN(md.rawSum)} 원/EA</b>
